@@ -20,7 +20,13 @@ jobs:
           python-version: '3.11'
       - run: pip install requests
 
+      # Each stage below has continue-on-error: true. One stage failing
+      # (e.g. a bad credential) should not throw away work a different,
+      # independent stage already did in the same run - and the final
+      # commit step must still run to save that work.
+
       - name: Stage 1 - Trend research
+        continue-on-error: true
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -30,6 +36,7 @@ jobs:
         run: python scripts/trend_research.py
 
       - name: Stage 3 - Script generation
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
@@ -38,19 +45,23 @@ jobs:
         run: python scripts/stage3_script.py
 
       - name: Stage 4 - Voiceover
+        continue-on-error: true
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         run: python scripts/stage4_voiceover.py
 
       - name: Stage 5 - Visual sourcing
+        continue-on-error: true
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: python scripts/stage5_visuals.py
 
       - name: Stage 6 - Edit and render
+        continue-on-error: true
         run: python scripts/stage6_render.py
 
       - name: Stage 8 - Metadata
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
@@ -59,6 +70,7 @@ jobs:
         run: python scripts/stage8_metadata.py
 
       - name: Commit pipeline outputs
+        if: always()
         run: |
           git config user.name "pipeline-bot"
           git config user.email "actions@users.noreply.github.com"
