@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Production console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#17181a; --panel:#1f2123; --panel-2:#26282e; --raised:#2c2e34;
+    --border:#34363c; --border-strong:#45474e;
+    --text:#ece9e2; --text-dim:#a6a49b; --text-faint:#6f6e68;
+    --amber:#e8a33d; --amber-dim:#4a3b1f;
+    --green:#4fa875; --green-dim:#1f3a2b;
+    --coral:#d8573a; --coral-dim:#432017;
+    --sans:'IBM Plex Sans', sans-serif; --mono:'IBM Plex Mono', ui-monospace, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:var(--sans); -webkit-font-smoothing:antialiased;}
+  .app{max-width:920px; margin:0 auto; padding:0 0 100px;}
+
+  .topbar{position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--border); padding:18px 16px 0;}
+  .topbar-row{display:flex; align-items:baseline; justify-content:space-between; gap:12px;}
+  .topbar h1{font-size:16px; font-weight:600; margin:0; letter-spacing:0.01em;}
+  .topbar .tag{font-family:var(--mono); font-size:11px; color:var(--text-faint);}
+  .counts{display:flex; gap:14px; margin-top:10px; font-family:var(--mono); font-size:12px; color:var(--text-dim);}
+  .counts b{color:var(--text); font-weight:500;}
+
+  .tabs{display:flex; gap:2px; margin-top:16px;}
+  .tab{flex:1; text-align:center; font-size:13px; font-weight:500; padding:10px 0; background:none; border:none; border-bottom:2px solid var(--border); color:var(--text-faint); cursor:pointer;}
+  .tab.active{color:var(--text); border-bottom-color:var(--amber);}
+
+  .queue-rail{display:flex; gap:8px; overflow-x:auto; padding:14px 16px; border-bottom:1px solid var(--border); scrollbar-width:none;}
+  .queue-rail::-webkit-scrollbar{display:none;}
+  .chip{flex:0 0 auto; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:9px 12px; cursor:pointer; min-width:150px; text-align:left;}
+  .chip:hover{border-color:var(--border-strong);}
+  .chip.active{border-color:var(--amber); background:var(--panel-2);}
+  .chip-title{font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px;}
+  .chip-stage{font-family:var(--mono); font-size:10px; margin-top:4px; display:flex; align-items:center; gap:5px;}
+  .dot{width:6px; height:6px; border-radius:50%; flex:0 0 auto;}
+  .dot.pending{background:var(--amber);}
+  .dot.approved{background:var(--green);}
+  .dot.returned{background:var(--coral);}
+  .dot.decided{background:var(--green);}
+
+  .empty{padding:60px 16px; text-align:center; color:var(--text-faint); font-size:13px;}
+
+  main{padding:20px 16px;}
+  .meta-row{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:4px;}
+  .meta-row h2{font-size:19px; font-weight:600; margin:0; line-height:1.35;}
+  .badge{font-family:var(--mono); font-size:10px; padding:4px 8px; border-radius:5px; white-space:nowrap; flex:0 0 auto; margin-top:2px;}
+  .badge.pending{background:var(--amber-dim); color:var(--amber);}
+  .badge.approved{background:var(--green-dim); color:var(--green);}
+  .badge.returned{background:var(--coral-dim); color:var(--coral);}
+  .badge.decided{background:var(--green-dim); color:var(--green);}
+  .topic{color:var(--text-dim); font-size:13px; margin:6px 0 16px;}
+
+  .readouts{display:flex; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:22px;}
+  .readout{flex:1; padding:10px 12px; border-right:1px solid var(--border);}
+  .readout:last-child{border-right:none;}
+  .readout-label{font-size:10px; color:var(--text-faint); text-transform:lowercase;}
+  .readout-val{font-family:var(--mono); font-size:13px; margin-top:3px; color:var(--text); line-height:1.4;}
+
+  .section-label{font-size:11px; color:var(--text-faint); margin-bottom:10px; letter-spacing:0.02em;}
+
+  .checklist{list-style:none; margin:0 0 22px; padding:0; display:flex; flex-direction:column; gap:8px;}
+  .item{border:1px solid var(--border); border-radius:8px; padding:12px 14px; background:var(--panel);}
+  .item.pass{border-color:var(--green-dim);}
+  .item.flag{border-color:var(--coral-dim);}
+  .item-top{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .item-label{font-size:13.5px; line-height:1.5;}
+  .toggle-group{display:flex; gap:4px; flex:0 0 auto;}
+  .toggle{font-family:var(--mono); font-size:11px; border:1px solid var(--border); background:var(--panel-2); color:var(--text-dim); padding:5px 9px; border-radius:5px; cursor:pointer;}
+  .toggle.on-pass{background:var(--green-dim); border-color:var(--green); color:var(--green);}
+  .toggle.on-flag{background:var(--coral-dim); border-color:var(--coral); color:var(--coral);}
+  .note{width:100%; margin-top:10px; background:var(--panel-2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--sans); font-size:13px; padding:8px 10px; resize:vertical; min-height:44px;}
+  .note::placeholder{color:var(--text-faint);}
+
+  .verdict{position:sticky; bottom:0; background:var(--bg); border-top:1px solid var(--border); padding:14px 16px; margin:0 -16px -20px;}
+  .verdict-hint{font-size:12px; color:var(--text-dim); margin-bottom:10px;}
+  .verdict-buttons{display:flex; gap:10px;}
+  .btn{flex:1; font-family:var(--sans); font-size:13.5px; font-weight:500; padding:12px; border-radius:8px; border:1px solid; cursor:pointer;}
+  .btn-approve{background:var(--green-dim); border-color:var(--green); color:var(--green);}
+  .btn-approve:disabled{opacity:0.35; cursor:not-allowed;}
+  .btn-reject{background:var(--coral-dim); border-color:var(--coral); color:var(--coral);}
+  .btn-reject:disabled{opacity:0.35; cursor:not-allowed;}
+  .verdict-done{font-size:13px; color:var(--text-dim); padding:6px 2px;}
+  .verdict-done b{color:var(--text);}
+
+  .history{margin-top:28px; padding-top:18px; border-top:1px solid var(--border);}
+  .history-item{font-size:12.5px; color:var(--text-dim); padding:8px 0; border-bottom:1px solid var(--border);}
+  .history-item:last-child{border-bottom:none;}
+  .history-item b{color:var(--text);}
+  .history-item .points{font-family:var(--mono); font-size:11px; color:var(--coral); margin-top:4px; white-space:pre-wrap;}
+
+  .footer-row{display:flex; justify-content:space-between; align-items:center; margin-top:24px;}
+  .reset-link{font-size:11px; color:var(--text-faint); background:none; border:none; cursor:pointer; text-decoration:underline; padding:0;}
+
+  /* topic approval specific */
+  .cycle-head{margin-bottom:16px;}
+  .cycle-head .section-label{margin-bottom:4px;}
+  .topic-cards{display:flex; flex-direction:column; gap:10px; margin-bottom:22px;}
+  .topic-card{border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--panel);}
+  .topic-card.approved{border-color:var(--green);}
+  .topic-card.rejected{opacity:0.45;}
+  .topic-card .t-title{font-size:14.5px; font-weight:500; line-height:1.4; margin-bottom:6px;}
+  .topic-card .t-angle{font-size:12.5px; color:var(--text-dim); margin-bottom:10px; line-height:1.5;}
+  .t-readouts{display:flex; border:1px solid var(--border); border-radius:7px; overflow:hidden; margin-bottom:10px;}
+  .t-readouts .readout{padding:8px 10px;}
+  .t-readouts .readout-val{font-size:11.5px;}
+  .approve-topic-btn{width:100%; font-family:var(--sans); font-size:13px; font-weight:500; padding:10px; border-radius:7px; border:1px solid var(--border-strong); background:var(--panel-2); color:var(--text); cursor:pointer;}
+  .approve-topic-btn.is-winner{background:var(--green-dim); border-color:var(--green); color:var(--green); cursor:default;}
+  .approve-topic-btn.is-loser{background:none; border-color:var(--border); color:var(--text-faint); cursor:default;}
+  .approve-topic-btn:disabled{cursor:default;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="topbar-row">
+      <h1>Production console</h1>
+      <span class="tag" id="statusTag">loading…</span>
+    </div>
+    <div class="counts" id="counts"></div>
+    <div class="tabs">
+      <button class="tab" data-tab="topics" id="tabTopics">Topic approval</button>
+      <button class="tab" data-tab="qc" id="tabQc">QC review</button>
+    </div>
+  </div>
+  <div id="railSlot"></div>
+  <main id="main"></main>
+</div>
+
+<script>
+const TOPIC_KEY = 'topic-cycles';
+const QC_KEY = 'qc-queue';
+
+/* Local, per-browser storage. Each device/browser that opens this page keeps its
+   own copy of the queue — there is no shared backend behind this static page. */
+const store = {
+  get(key) {
+    const v = localStorage.getItem(key);
+    if (v === null) throw new Error('not found');
+    return { value: v };
+  },
+  set(key, value) {
+    localStorage.setItem(key, value);
+    return { value };
+  },
+};
+
+const SEED_CYCLES = [
+  {
+    id: 'c1',
+    generated: new Date().toISOString().slice(0, 10),
+    status: 'pending',
+    approvedId: null,
+    candidates: [
+      {
+        id: 't1',
+        title: 'He Lost Everything at 34. What He Did Next Changed Everything.',
+        angle: 'Reframing failure as data, not identity',
+        keyword: 'comeback story, business failure',
+        volume: '18k/mo, rising',
+        competition: 'Moderate — 6 similar videos in 30 days, none over 200k views',
+      },
+      {
+        id: 't2',
+        title: 'The 6-Minute Morning Routine of People Who Never Burn Out',
+        angle: 'Sustainable discipline over willpower spikes',
+        keyword: 'morning routine, burnout prevention',
+        volume: '24k/mo, rising',
+        competition: 'High — several 1M+ view videos, but 8 months old',
+      },
+      {
+        id: 't3',
+        title: 'Why Discipline Feels Impossible (And the One Shift That Fixes It)',
+        angle: 'Motivation as a byproduct of identity, not willpower',
+        keyword: 'discipline, motivation psychology',
+        volume: '31k/mo, rising fast',
+        competition: 'Low — few dedicated videos on this specific reframe',
+      },
+    ],
+  },
+];
+
+const SEED_QUEUE = [
+  {
+    id: 'v1',
+    title: 'He Lost Everything at 34. What He Did Next Changed Everything.',
+    topic: 'Reframing failure as data, not identity',
+    stage: 'pending',
+    runtime: '17:42', loudness: '-16.1 LUFS', resolution: '3840×2160',
+    checklist: [
+      { id: 'hook', label: 'Hook lands in the first 30 seconds — not a generic "welcome back"', status: 'pending', note: '' },
+      { id: 'facts', label: 'Claims are accurate, sourced, or softened where unverifiable', status: 'pending', note: '' },
+      { id: 'thumb', label: 'Title and thumbnail represent the actual content, no bait-and-switch', status: 'pending', note: '' },
+      { id: 'tone', label: 'Tone and framing fit brand voice and niche boundaries', status: 'pending', note: '' },
+      { id: 'visuals', label: 'Visuals feel distinct, not generic AI stock', status: 'pending', note: '' },
+      { id: 'pacing', label: 'Pacing holds — no dead stretch in the body section', status: 'pending', note: '' },
+      { id: 'cta', label: 'Close and CTA land naturally, single clear ask', status: 'pending', note: '' },
+    ],
+    history: [],
+  },
+  {
+    id: 'v2',
+    title: 'The 6-Minute Morning Routine of People Who Never Burn Out',
+    topic: 'Sustainable discipline over willpower spikes',
+    stage: 'pending',
+    runtime: '14:05', loudness: '-15.8 LUFS', resolution: '3840×2160',
+    checklist: [
+      { id: 'hook', label: 'Hook lands in the first 30 seconds — not a generic "welcome back"', status: 'pending', note: '' },
+      { id: 'facts', label: 'Claims are accurate, sourced, or softened where unverifiable', status: 'pending', note: '' },
+      { id: 'thumb', label: 'Title and thumbnail represent the actual content, no bait-and-switch', status: 'pending', note: '' },
+      { id: 'tone', label: 'Tone and framing fit brand voice and niche boundaries', status: 'pending', note: '' },
+      { id: 'visuals', label: 'Visuals feel distinct, not generic AI stock', status: 'pending', note: '' },
+      { id: 'pacing', label: 'Pacing holds — no dead stretch in the body section', status: 'pending', note: '' },
+      { id: 'cta', label: 'Close and CTA land naturally, single clear ask', status: 'pending', note: '' },
+    ],
+    history: [],
+  },
+];
+
+let activeTab = 'topics';
+let cycles = [];
+let activeCycleId = null;
+let queue = [];
+let activeVideoId = null;
+
+async function loadAll() {
+  try {
+    const res = store.get(TOPIC_KEY);
+    cycles = JSON.parse(res.value);
+  } catch (e) {
+    cycles = SEED_CYCLES;
+    saveCycles();
+  }
+  activeCycleId = cycles.find(c => c.status === 'pending')?.id || cycles[0]?.id || null;
+
+  try {
+    const res2 = store.get(QC_KEY);
+    queue = JSON.parse(res2.value);
+  } catch (e) {
+    queue = SEED_QUEUE;
+    saveQueue();
+  }
+  activeVideoId = queue.find(v => v.stage === 'pending')?.id || queue[0]?.id || null;
+
+  render();
+}
+
+function saveCycles() {
+  try { store.set(TOPIC_KEY, JSON.stringify(cycles)); setStatus('saved on this device'); }
+  catch (e) { setStatus('save failed'); }
+}
+function saveQueue() {
+  try { store.set(QC_KEY, JSON.stringify(queue)); setStatus('saved on this device'); }
+  catch (e) { setStatus('save failed'); }
+}
+function setStatus(msg) { document.getElementById('statusTag').textContent = msg; }
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+function render() {
+  document.getElementById('tabTopics').className = 'tab' + (activeTab === 'topics' ? ' active' : '');
+  document.getElementById('tabQc').className = 'tab' + (activeTab === 'qc' ? ' active' : '');
+  document.getElementById('tabTopics').onclick = () => { activeTab = 'topics'; render(); };
+  document.getElementById('tabQc').onclick = () => { activeTab = 'qc'; render(); };
+
+  if (activeTab === 'topics') { renderCounts_Topics(); renderTopicsRail(); renderTopicsMain(); }
+  else { renderCounts_QC(); renderQcRail(); renderQcMain(); }
+
+  const resetBtn = document.getElementById('resetLink');
+  if (resetBtn) resetBtn.onclick = resetAll;
+}
+
+/* ---------- TOPIC APPROVAL ---------- */
+
+function renderCounts_Topics() {
+  const pending = cycles.filter(c => c.status === 'pending').length;
+  const decided = cycles.filter(c => c.status === 'decided').length;
+  document.getElementById('counts').innerHTML =
+    `<span><b>${pending}</b> awaiting pick</span><span><b>${decided}</b> decided</span>`;
+  setStatus(pending ? 'shortlist ready' : 'no pending shortlist');
+}
+
+function renderTopicsRail() {
+  const rail = document.getElementById('railSlot');
+  if (cycles.length === 0) { rail.innerHTML = ''; return; }
+  rail.innerHTML = '<div class="queue-rail" id="queueRail"></div>';
+  const el = document.getElementById('queueRail');
+  cycles.forEach(c => {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (c.id === activeCycleId ? ' active' : '');
+    chip.innerHTML = `<div class="chip-title">Shortlist — ${c.generated}</div>
+      <div class="chip-stage"><span class="dot ${c.status}"></span>${c.status === 'pending' ? 'awaiting pick' : 'decided'}</div>`;
+    chip.onclick = () => { activeCycleId = c.id; render(); };
+    el.appendChild(chip);
+  });
+}
+
+function renderTopicsMain() {
+  const main = document.getElementById('main');
+  const c = cycles.find(x => x.id === activeCycleId);
+  if (!c) {
+    main.innerHTML = `<div class="empty">No shortlist waiting.<br>Ask Claude to run trend research for a new set of 3 candidates.</div>` + footer();
+    return;
+  }
+  main.innerHTML = `
+    <div class="cycle-head">
+      <div class="section-label">Shortlist generated ${c.generated} — approve one of three</div>
+    </div>
+    <div class="topic-cards" id="topicCards"></div>
+    ${c.status === 'decided' ? `<div class="verdict-done"><b>Decided.</b> Approved topic moves to script &amp; research.</div>` : ''}
+    ${footer()}
+  `;
+  const cardsEl = document.getElementById('topicCards');
+  c.candidates.forEach(t => {
+    const state = c.status !== 'decided' ? 'open' : (t.id === c.approvedId ? 'approved' : 'rejected');
+    const div = document.createElement('div');
+    div.className = 'topic-card' + (state === 'approved' ? ' approved' : state === 'rejected' ? ' rejected' : '');
+    div.innerHTML = `
+      <div class="t-title">${escapeHtml(t.title)}</div>
+      <div class="t-angle">${escapeHtml(t.angle)}</div>
+      <div class="t-readouts">
+        <div class="readout"><div class="readout-label">keyword</div><div class="readout-val">${escapeHtml(t.keyword)}</div></div>
+        <div class="readout"><div class="readout-label">volume</div><div class="readout-val">${escapeHtml(t.volume)}</div></div>
+      </div>
+      <div class="t-readouts">
+        <div class="readout"><div class="readout-label">competition</div><div class="readout-val">${escapeHtml(t.competition)}</div></div>
+      </div>
+      <button class="approve-topic-btn ${state === 'approved' ? 'is-winner' : state === 'rejected' ? 'is-loser' : ''}" ${state !== 'open' ? 'disabled' : ''}>
+        ${state === 'approved' ? 'Approved ✓' : state === 'rejected' ? 'Not selected' : 'Approve this topic'}
+      </button>
+    `;
+    if (state === 'open') {
+      div.querySelector('.approve-topic-btn').onclick = () => approveTopic(c, t.id);
+    }
+    cardsEl.appendChild(div);
+  });
+}
+
+function approveTopic(cycle, topicId) {
+  cycle.status = 'decided';
+  cycle.approvedId = topicId;
+  saveCycles();
+  render();
+}
+
+/* ---------- QC REVIEW ---------- */
+
+function renderCounts_QC() {
+  const pending = queue.filter(v => v.stage === 'pending').length;
+  const approved = queue.filter(v => v.stage === 'approved').length;
+  const returned = queue.filter(v => v.stage === 'returned').length;
+  document.getElementById('counts').innerHTML =
+    `<span><b>${pending}</b> pending</span><span><b>${approved}</b> approved</span><span><b>${returned}</b> returned</span>`;
+  setStatus(pending ? `${pending} awaiting review` : 'queue clear');
+}
+
+function renderQcRail() {
+  const rail = document.getElementById('railSlot');
+  if (queue.length === 0) { rail.innerHTML = ''; return; }
+  rail.innerHTML = '<div class="queue-rail" id="queueRail"></div>';
+  const el = document.getElementById('queueRail');
+  queue.forEach(v => {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (v.id === activeVideoId ? ' active' : '');
+    chip.innerHTML = `<div class="chip-title">${escapeHtml(v.title)}</div>
+      <div class="chip-stage"><span class="dot ${v.stage}"></span>${stageLabel(v.stage)}</div>`;
+    chip.onclick = () => { activeVideoId = v.id; render(); };
+    el.appendChild(chip);
+  });
+}
+
+function stageLabel(s) { return s === 'pending' ? 'pending QC' : s === 'approved' ? 'approved' : 'returned'; }
+
+function renderQcMain() {
+  const main = document.getElementById('main');
+  const v = queue.find(x => x.id === activeVideoId);
+  if (!v) { main.innerHTML = `<div class="empty">No videos in the queue.</div>` + footer(); return; }
+
+  const flagged = v.checklist.filter(i => i.status === 'flag');
+  const allResolved = v.checklist.every(i => i.status === 'pass');
+  const anyFlag = flagged.length > 0;
+
+  main.innerHTML = `
+    <div class="meta-row">
+      <h2>${escapeHtml(v.title)}</h2>
+      <span class="badge ${v.stage}">${stageLabel(v.stage)}</span>
+    </div>
+    <div class="topic">${escapeHtml(v.topic)}</div>
+    <div class="readouts">
+      <div class="readout"><div class="readout-label">runtime</div><div class="readout-val">${v.runtime}</div></div>
+      <div class="readout"><div class="readout-label">loudness</div><div class="readout-val">${v.loudness}</div></div>
+      <div class="readout"><div class="readout-label">resolution</div><div class="readout-val">${v.resolution}</div></div>
+    </div>
+    <div class="section-label">Human checklist — mark each point, flagged items need a note</div>
+    <ul class="checklist" id="checklist"></ul>
+    <div class="verdict">
+      ${v.stage === 'pending' ? `
+        <div class="verdict-hint">${anyFlag ? `${flagged.length} point${flagged.length > 1 ? 's' : ''} flagged — sending back will compile them as rectification notes.` : allResolved ? 'All points cleared. Ready to approve.' : 'Mark every point before deciding.'}</div>
+        <div class="verdict-buttons">
+          <button class="btn btn-approve" id="approveBtn" ${allResolved ? '' : 'disabled'}>Approve &amp; publish</button>
+          <button class="btn btn-reject" id="rejectBtn" ${anyFlag ? '' : 'disabled'}>Send back to script &amp; research</button>
+        </div>
+      ` : v.stage === 'approved' ? `<div class="verdict-done"><b>Approved.</b> Cleared for the publish step.</div>`
+        : `<div class="verdict-done"><b>Returned to script &amp; research.</b> Rectification notes below.</div>`}
+    </div>
+    ${v.history.length ? `<div class="history"><div class="section-label">Rectification history</div>${v.history.map(h => `
+      <div class="history-item"><b>${h.date}</b> — sent back to script &amp; research
+        <div class="points">${escapeHtml(h.points)}</div>
+      </div>`).join('')}</div>` : ''}
+    ${footer()}
+  `;
+
+  const list = document.getElementById('checklist');
+  v.checklist.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'item' + (item.status === 'pass' ? ' pass' : item.status === 'flag' ? ' flag' : '');
+    li.innerHTML = `
+      <div class="item-top">
+        <div class="item-label">${escapeHtml(item.label)}</div>
+        <div class="toggle-group">
+          <button class="toggle ${item.status === 'pass' ? 'on-pass' : ''}" data-id="${item.id}" data-action="pass">Pass</button>
+          <button class="toggle ${item.status === 'flag' ? 'on-flag' : ''}" data-id="${item.id}" data-action="flag">Flag</button>
+        </div>
+      </div>
+      ${item.status === 'flag' ? `<textarea class="note" data-id="${item.id}" placeholder="What needs to change, specifically">${escapeHtml(item.note)}</textarea>` : ''}
+    `;
+    list.appendChild(li);
+  });
+
+  list.querySelectorAll('.toggle').forEach(btn => {
+    btn.onclick = () => {
+      const item = v.checklist.find(i => i.id === btn.dataset.id);
+      item.status = btn.dataset.action;
+      if (item.status !== 'flag') item.note = '';
+      saveQueue();
+      render();
+    };
+  });
+  list.querySelectorAll('.note').forEach(ta => {
+    ta.oninput = () => { v.checklist.find(i => i.id === ta.dataset.id).note = ta.value; };
+    ta.onblur = () => saveQueue();
+  });
+
+  if (v.stage === 'pending') {
+    const approveBtn = document.getElementById('approveBtn');
+    const rejectBtn = document.getElementById('rejectBtn');
+    if (approveBtn) approveBtn.onclick = () => setVerdict(v, 'approved');
+    if (rejectBtn) rejectBtn.onclick = () => setVerdict(v, 'returned');
+  }
+}
+
+function setVerdict(v, stage) {
+  v.stage = stage;
+  if (stage === 'returned') {
+    const points = v.checklist.filter(i => i.status === 'flag')
+      .map(i => `• ${i.label}${i.note ? ' — ' + i.note : ' (no note added)'}`).join('\n');
+    v.history.push({ date: new Date().toISOString().slice(0, 10), points });
+  }
+  saveQueue();
+  const next = queue.find(x => x.stage === 'pending' && x.id !== v.id);
+  if (next) activeVideoId = next.id;
+  render();
+}
+
+/* ---------- shared ---------- */
+
+function footer() {
+  return `<div class="footer-row"><button class="reset-link" id="resetLink">Reset sample data</button></div>`;
+}
+
+async function resetAll() {
+  cycles = JSON.parse(JSON.stringify(SEED_CYCLES));
+  activeCycleId = cycles[0].id;
+  queue = JSON.parse(JSON.stringify(SEED_QUEUE));
+  activeVideoId = queue[0].id;
+  await saveCycles();
+  await saveQueue();
+  render();
+}
+
+loadAll();
+</script>
+</body>
+</html>
