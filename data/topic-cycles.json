@@ -1,1 +1,34 @@
-[]
+[
+  {
+    "id": "c1",
+    "generated": "2026-08-31",
+    "status": "decided",
+    "approvedId": "t2",
+    "candidates": [
+      {
+        "id": "t1",
+        "title": "I Studied David Goggins for 30 Days. Here's What Changed.",
+        "angle": "Discipline as identity, not motivation \u2014 modeled on a real case study",
+        "keyword": "goggins motivation, self discipline",
+        "volume": "98k/mo \u2014 fastest-rising angle, +95% week over week",
+        "competition": "Moderate \u2014 breakout videos from 1k\u201310k sub channels hitting 20\u201335k views"
+      },
+      {
+        "id": "t2",
+        "title": "The Real Reason You Have No Discipline (It's Not Willpower)",
+        "angle": "Reframing discipline as systems and identity, not willpower",
+        "keyword": "discipline, self discipline",
+        "volume": "768k/mo \u2014 highest-volume keyword in the niche",
+        "competition": "Score 39/100 \u2014 high volume but underexploited for its size"
+      },
+      {
+        "id": "t3",
+        "title": "\"Just Be Disciplined\" Advice Doesn't Work \u2014 Here's What Does",
+        "angle": "Practical systems over generic advice, targeting a specific long-tail search",
+        "keyword": "how to be disciplined, self discipline",
+        "volume": "77k/mo, opportunity score 68/100",
+        "competition": "Score 39/100 \u2014 several small-creator breakouts already validate demand"
+      }
+    ]
+  }
+]
