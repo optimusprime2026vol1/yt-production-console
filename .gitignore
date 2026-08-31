@@ -1,0 +1,4 @@
+# Intermediate render files - only the final render.mp4 and sourced broll
+# are worth keeping
+assets/*/_*
+assets/*/broll/_*

@@ -1,39 +1,36 @@
 # Credentials checklist
 
-Add these as GitHub repo secrets, in this order — each one unlocks exactly
-one pipeline stage, so you can test incrementally instead of configuring
-everything up front.
+Add these as GitHub repo secrets — **Settings → Secrets and variables →
+Actions → New repository secret**. All the stage code is already pushed and
+waiting; each secret you add unlocks the corresponding stage on the next
+Pipeline run. Order doesn't functionally matter now that everything's built
+(each stage checks its own secret independently), but this is a sane order
+to add them in and sanity-check the logs as you go.
 
-Where to add them: repo → **Settings → Secrets and variables → Actions →
-New repository secret**.
+## 1. `YOUTUBE_API_KEY` — Stage 1 (trend research)
+- [Google Cloud Console](https://console.cloud.google.com/) → enable **YouTube Data API v3** → Credentials → API key
+- Read-only, low risk, generous free quota
 
-## 1. `YOUTUBE_API_KEY` — unlocks Stage 1 (trend research)
-- Go to [Google Cloud Console](https://console.cloud.google.com/) → create/select a project
-- Enable **YouTube Data API v3**
-- Credentials → Create credentials → API key
-- Read-only usage here, low risk. Free quota (10,000 units/day) is more than
-  enough for a few research runs a day.
-
-## 2. `ANTHROPIC_API_KEY` — unlocks Stage 1 synthesis, Stage 3 (script), Stage 8 (metadata)
+## 2. `ANTHROPIC_API_KEY` — Stages 1 (synthesis), 3 (script), 8 (metadata)
 - [console.anthropic.com](https://console.anthropic.com/) → API keys → Create key
-- This is the same kind of key used in the `anthropic_api_in_artifacts`
-  pattern — standard `/v1/messages` endpoint.
 
-## 3. `ELEVENLABS_API_KEY` — unlocks Stage 4 (voiceover)
+## 3. `ELEVENLABS_API_KEY` — Stage 4 (voiceover)
 - [elevenlabs.io](https://elevenlabs.io/) → Profile → API keys
-- Note: this replaces the vidIQ voiceover used earlier in chat — same idea,
-  callable from a script instead of only from inside a conversation.
+- Optional: `ELEVENLABS_VOICE_ID` to override the default voice (same
+  "George" voice used earlier in this project: `JBFqnCBsd6RMkjVDRZzb`)
 
-## 4. `PEXELS_API_KEY` — unlocks Stage 5 (visual sourcing)
-- [pexels.com/api](https://www.pexels.com/api/) → free, instant signup
-- (Pixabay can be added as a fallback source later the same way.)
+## 4. `PEXELS_API_KEY` — Stage 5 (visual sourcing)
+- [pexels.com/api](https://www.pexels.com/api/) — free, instant
 
-## 5. `YOUTUBE_OAUTH_CLIENT_ID`, `YOUTUBE_OAUTH_CLIENT_SECRET`, `YOUTUBE_OAUTH_REFRESH_TOKEN` — unlocks Stage 9 (publish)
-- Deliberately last and most involved — full OAuth consent flow, not just an
-  API key, because this is the credential that can put a video on your real
-  channel.
-- Build this one together when we get there rather than doing it solo —
-  wrong scopes or a leaked refresh token here are the highest-consequence
-  mistake in this whole checklist.
-- This stage stays manual-trigger regardless of what other automation exists
-  (see SYSTEM_PLAN.md) — having the credential doesn't change that.
+## 5. `YOUTUBE_OAUTH_CLIENT_ID`, `YOUTUBE_OAUTH_CLIENT_SECRET`, `YOUTUBE_OAUTH_REFRESH_TOKEN` — Stage 9 (publish)
+- Full OAuth consent flow, not just an API key — build this one together
+  rather than solo, since a leaked refresh token here is the
+  highest-consequence mistake in this whole checklist
+- Having this credential does **not** make publishing automatic — it only
+  enables the separate, manual-only `publish.yml` workflow
+
+## Not yet in the checklist
+
+- An image-gen key (e.g. `STABILITY_API_KEY`) for thumbnails — Stage 8
+  currently produces titles/description/tags only
+- Anything for Stage 10 (analytics) — not built yet

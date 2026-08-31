@@ -1,0 +1,58 @@
+name: Pipeline (research through pre-publish)
+
+on:
+  workflow_dispatch: {}
+  # Heartbeat: uncomment once every stage has been confirmed working on a
+  # manual run. Publish (Stage 9) is a SEPARATE workflow and is never
+  # triggered from here - see SYSTEM_PLAN.md.
+  # schedule:
+  #   - cron: '0 */6 * * *'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests
+
+      - name: Stage 1 - Trend research
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/trend_research.py
+
+      - name: Stage 3 - Script generation
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/stage3_script.py
+
+      - name: Stage 4 - Voiceover
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: python scripts/stage4_voiceover.py
+
+      - name: Stage 5 - Visual sourcing
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: python scripts/stage5_visuals.py
+
+      - name: Stage 6 - Edit and render
+        run: python scripts/stage6_render.py
+
+      - name: Stage 8 - Metadata
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/stage8_metadata.py
+
+      - name: Commit pipeline outputs
+        run: |
+          git config user.name "pipeline-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/ scripts-content/ assets/
+          git diff --cached --quiet || git commit -m "Pipeline run: automated stage outputs [skip ci]"
+          git push

@@ -1,0 +1,36 @@
+name: Stage 9 - Publish (manual only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: 'Pipeline video id to publish (matches assets/<id>/ and its data/qc-queue.json entry)'
+        required: true
+      privacy_status:
+        description: 'YouTube privacy status'
+        required: true
+        default: 'private'
+        type: choice
+        options: [private, unlisted, public]
+
+# This workflow is intentionally never added to `schedule:` or any push
+# trigger. Publishing to the real channel always requires a human to type
+# the video id and press "Run workflow" here - see SYSTEM_PLAN.md.
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests
+      - name: Publish to YouTube
+        env:
+          YOUTUBE_OAUTH_CLIENT_ID: ${{ secrets.YOUTUBE_OAUTH_CLIENT_ID }}
+          YOUTUBE_OAUTH_CLIENT_SECRET: ${{ secrets.YOUTUBE_OAUTH_CLIENT_SECRET }}
+          YOUTUBE_OAUTH_REFRESH_TOKEN: ${{ secrets.YOUTUBE_OAUTH_REFRESH_TOKEN }}
+          VIDEO_ID: ${{ github.event.inputs.video_id }}
+          PRIVACY_STATUS: ${{ github.event.inputs.privacy_status }}
+        run: python scripts/publish_video.py
