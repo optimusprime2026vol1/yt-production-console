@@ -3,11 +3,10 @@
 Stage 3 - Script generation.
 
 For each topic cycle whose approved candidate doesn't have a script yet,
-asks Claude to write the full production script (cold open through close,
-with visual cues and a fact-check log) in the structure used throughout
-this project, then writes it to scripts-content/{id}.md.
+asks Claude (Bedrock or direct API, see llm_client.py) to write the full
+production script, then writes it to scripts-content/{id}.md.
 
-Required secret: ANTHROPIC_API_KEY
+Required: LLM credentials (see llm_client.py)
 Reads: data/topic-cycles.json
 Writes: scripts-content/{id}.md, data/pipeline-state.json
 """
@@ -15,9 +14,9 @@ import json
 import os
 import sys
 
-import requests
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from llm_client import call_claude, has_llm_credentials, missing_credentials_message
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 TOPICS_PATH = "data/topic-cycles.json"
 STATE_PATH = "data/pipeline-state.json"
 SCRIPTS_DIR = "scripts-content"
@@ -66,28 +65,9 @@ def save_json(path, data):
         json.dump(data, f, indent=2)
 
 
-def call_claude(prompt, max_tokens=6000):
-    resp = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": "claude-sonnet-4-6",
-            "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        timeout=180,
-    )
-    resp.raise_for_status()
-    return resp.json()["content"][0]["text"]
-
-
 def main():
-    if not ANTHROPIC_API_KEY:
-        print("Skipping script generation - missing ANTHROPIC_API_KEY")
+    if not has_llm_credentials():
+        print(f"Skipping script generation - {missing_credentials_message()}")
         sys.exit(0)
 
     cycles = load_json(TOPICS_PATH, [])
@@ -110,7 +90,7 @@ Video title: {candidate['title']}
 Core angle: {candidate['angle']}
 Target keyword: {candidate.get('keyword', '')}"""
 
-        script_text = call_claude(prompt)
+        script_text = call_claude(prompt, max_tokens=6000)
         os.makedirs(SCRIPTS_DIR, exist_ok=True)
         out_path = os.path.join(SCRIPTS_DIR, f"{topic_id}.md")
         with open(out_path, "w") as f:

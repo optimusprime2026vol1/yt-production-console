@@ -2,11 +2,12 @@
 """
 Stage 1 - Trend research.
 
-Pulls recent high-velocity videos in the channel's niche from the YouTube Data
-API, then asks Claude to synthesize them into exactly 3 candidate video topics
-in the same shape the production console's Topic approval tab expects.
+Pulls recent high-velocity videos in the channel's niche from the YouTube
+Data API, then asks Claude (Bedrock or direct API, see llm_client.py) to
+synthesize them into exactly 3 candidate video topics in the shape the
+production console's Topic approval tab expects.
 
-Required secrets (env vars): YOUTUBE_API_KEY, ANTHROPIC_API_KEY
+Required: YOUTUBE_API_KEY, plus LLM credentials (see llm_client.py)
 Writes: data/topic-cycles.json (appends one new pending cycle)
 """
 import json
@@ -17,11 +18,12 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from llm_client import call_claude, has_llm_credentials, missing_credentials_message
+
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 DATA_PATH = "data/topic-cycles.json"
 
-# Adjust these to match the channel's actual niche.
 SEED_KEYWORDS = ["discipline", "motivation", "self improvement", "resilience"]
 NICHE_BRIEF = (
     "A faceless long-form YouTube channel making motivational / self-improvement "
@@ -31,11 +33,14 @@ NICHE_BRIEF = (
 
 
 def require_secrets():
-    missing = [n for n, v in [("YOUTUBE_API_KEY", YOUTUBE_API_KEY),
-                               ("ANTHROPIC_API_KEY", ANTHROPIC_API_KEY)] if not v]
+    missing = []
+    if not YOUTUBE_API_KEY:
+        missing.append("YOUTUBE_API_KEY")
+    if not has_llm_credentials():
+        missing.append("LLM credentials (" + missing_credentials_message() + ")")
     if missing:
-        print(f"Skipping trend research - missing secrets: {', '.join(missing)}")
-        sys.exit(0)  # exit cleanly - just not configured yet, not a failure
+        print(f"Skipping trend research - missing: {', '.join(missing)}")
+        sys.exit(0)
 
 
 def fetch_trending_signals():
@@ -77,32 +82,11 @@ Here are recent high-view-velocity videos in adjacent keyword searches:
 {json.dumps(signals, indent=2)}
 
 Produce exactly 3 candidate video topics for this channel's next video, as a
-JSON array. Each candidate must have: "title" (a real, non-clickbait video
-title), "angle" (one sentence, the specific reframe/insight), "keyword" (2-4
-word search phrase), "volume" (a short plain-language estimate of search
-interest based on the signals above), "competition" (a short plain-language
-read of how saturated this specific angle is based on the signals).
+JSON array. Each candidate must have: "title", "angle", "keyword", "volume",
+"competition". Ground every claim in the signals provided. Return ONLY the
+JSON array, no other text."""
 
-Ground every claim in the signals provided - do not invent view counts or
-statistics not implied by the data above. Return ONLY the JSON array, no
-other text."""
-
-    resp = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 1500,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        timeout=60,
-    )
-    resp.raise_for_status()
-    text = resp.json()["content"][0]["text"].strip()
+    text = call_claude(prompt, max_tokens=1500).strip()
     if text.startswith("```"):
         text = text.strip("`")
         text = text.split("\n", 1)[1] if "\n" in text else text
