@@ -5,13 +5,26 @@ Actions → New repository secret**. All the stage code is already pushed and
 waiting; each secret you add unlocks the corresponding stage on the next
 Pipeline run.
 
-## `ANTHROPIC_API_KEY` — Stages 1 (synthesis), 3 (script), 8 (metadata)
-- [console.anthropic.com](https://console.anthropic.com/) → API keys → Create key
-- This must be a real key from that page — a Bedrock key will fail here
-  with a 401, since Bedrock and the direct Anthropic API use different
-  auth and aren't interchangeable. (Bedrock support was removed from this
-  project on request — `scripts/llm_client.py` now only talks to the
-  direct Anthropic API.)
+## LLM credential — pick ONE of these two (Stages 1 synthesis, 3, 8)
+
+**Option A — AWS Bedrock** (what this project is currently set up to use)
+- `AWS_BEARER_TOKEN_BEDROCK` — generate from the Bedrock console's **API
+  keys** page. This is AWS's simpler bearer-token key type, not a full
+  AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY pair, and not full SigV4 signing.
+- `BEDROCK_MODEL_ID` — the exact Claude model/inference-profile id for your
+  account and region, copied from the Bedrock console. This is **not** the
+  same string as the direct API's model name (e.g. it may look like
+  `us.anthropic.claude-...-v1:0`) — copy it exactly, don't guess it.
+- `AWS_REGION` — optional, defaults to `us-east-1` if not set.
+
+**Option B — direct Anthropic API**
+- `ANTHROPIC_API_KEY` — [console.anthropic.com](https://console.anthropic.com/) → API keys → Create key
+- Must be a real key from that page — a Bedrock key here will fail with a
+  401, the two auth types aren't interchangeable.
+
+`scripts/llm_client.py` checks for Bedrock credentials first, falls back to
+`ANTHROPIC_API_KEY` if Bedrock isn't set. You only need one of the two —
+if both are present, Bedrock wins.
 
 ## `YOUTUBE_API_KEY` — Stage 1 (trend research)
 - [Google Cloud Console](https://console.cloud.google.com/) → enable **YouTube Data API v3** → Credentials → API key
