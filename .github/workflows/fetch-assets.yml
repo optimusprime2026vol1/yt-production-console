@@ -1,0 +1,38 @@
+name: Fetch pending assets
+
+on:
+  push:
+    paths:
+      - 'pending-downloads.txt'
+  workflow_dispatch: {}
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download listed assets
+        run: |
+          mkdir -p assets
+          while IFS='|' read -r url filename; do
+            [ -z "$url" ] && continue
+            case "$url" in \#*) continue ;; esac
+            echo "Fetching $filename"
+            if curl -L --fail --silent --show-error -o "assets/$filename" "$url"; then
+              echo "OK: $filename"
+            else
+              echo "FAILED (link likely expired): $filename" >&2
+            fi
+          done < pending-downloads.txt
+
+      - name: Clear processed manifest and commit fetched assets
+        run: |
+          git config user.name "asset-fetch-bot"
+          git config user.email "actions@users.noreply.github.com"
+          : > pending-downloads.txt
+          git add assets/ pending-downloads.txt
+          git diff --cached --quiet || git commit -m "Auto-fetch pending assets [skip ci]"
+          git push
