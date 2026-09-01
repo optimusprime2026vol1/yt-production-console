@@ -2,6 +2,69 @@
   "t2": {
     "scriptGenerated": true,
     "title": "The Real Reason You Have No Discipline (It's Not Willpower)",
-    "scriptPath": "scripts-content/t2.md"
+    "scriptPath": "scripts-content/t2.md",
+    "visualsReady": true,
+    "sections": [
+      {
+        "start": 0,
+        "end": 30,
+        "duration": 30,
+        "visual": "Open on a black screen. A single phone alarm clock icon appears in center. A finger presses snooze. The screen glitches into a rapid montage of stock footage: a person staring at a laptop, a TV glow, a clock ticking. The montage is fast, chaotic, slightly desaturated. The final shot cuts to a shadowed silhouette of a person sitting at a desk, motionless. Text overlay burns in: \"THE LIE OF WILLPOWER\". No faces shown. No logos."
+      },
+      {
+        "start": 30,
+        "end": 120,
+        "duration": 90,
+        "visual": "B-Roll of a phone screen with social media icons bouncing reactively. Cut to a generic productivity app interface. Then, a split screen: one side shows a fancy office with a \"guru\" speaking; the other side shows a person hunched over a laptop on a kitchen table. The lighting is dim. Text overlay: \"WILLPOWER IS TRAINABLE.\" Then a strike-through: \"IT'S FINITE.\" The screen fades to black."
+      },
+      {
+        "start": 120,
+        "end": 285,
+        "duration": 165,
+        "visual": "Animated diagram of a fuel tank labeled \"DECISIONS\". Icons of \"Choosing socks\" and \"Email sorting\" empty the tank. A text prompt appears: \"TRIGGER > DECISION.\" Cut to a generic photo of a typewriter (no person, no identifying details). A calendar with one recurring event: \"WRITE.\" The calendar is highlighted; no other events are present."
+      },
+      {
+        "start": 285,
+        "end": 450,
+        "duration": 165,
+        "visual": "Side-by-side comparison. Left: Bowl of chocolate on a desk with a hand grabbing it. Right: Bowl of fruit on a table ten feet away with a person walking. Then, a clean animation: a smartphone with a red slash through it, moving away from a bed. Text: \"FRICTION = SURVIVAL.\" Cut to a cartoon of a brain with a \"Manager\" label, holding a stop sign, looking exhausted."
+      },
+      {
+        "start": 450,
+        "end": 615,
+        "duration": 165,
+        "visual": "Metaphor animation of a person standing on a cliff edge holding a flag labelled \"I'M A HARD WORKER.\" The flag is heavy, dragging them down. Text overlay: \"BECOME THE LOG.\" Cut to a simple graphic of a crown. Voice-over says \"King\" but text on screen says \"Subject.\" The graphic flips."
+      },
+      {
+        "start": 615,
+        "end": 750,
+        "duration": 135,
+        "visual": "Animated graph. The Y-axis is \"Effort\"; the X-axis is \"Willpower Required.\" The line spikes to 100% at the \"START\" label. Then the line drops to 20% at the \"15 MINUTES\" label. This graph stays on screen for a few seconds. Then, a timer appears: \"2:00\". When it hits \"0:00\", the screen switches to a collage of stock photos showing people running, writing, reading\u2014all energetic."
+      },
+      {
+        "start": 750,
+        "end": 840,
+        "duration": 90,
+        "visual": "Calendar grid. The days are empty, except blocks of color representing \"Deep Work\" periods. Text overlay: \"SCHEDULE THE STRATEGY, NOT THE DRAMA.\" Cut to a split screen: Left side, a person looking at a confusing daily planner, looking stressed. Right side, a person looking at a minimalist clock with one block highlighted\u2014they look calm."
+      },
+      {
+        "start": 840,
+        "end": 1020,
+        "duration": 180,
+        "visual": "A montage set to no music. Just the sound of breathing. Scenes: A person at a desk looking out a window. A pair of running shoes on a sidewalk. A stack of books on a nightstand. A pen on a notebook. The images are still, serene. The mood shifts from frantic to quiet. Text appears slowly: \"CHOICE. SUFFERING. MEANING.\""
+      },
+      {
+        "start": 1020,
+        "end": 1140,
+        "duration": 120,
+        "visual": "On-screen text, typewriter style, listing: 1) ONE DECISION. 2) DELETE THE APP. 3) SCHEDULE THE STILLNESS. Next to each, a minimal icon. The background is a muted, neutral color."
+      },
+      {
+        "start": 1140,
+        "end": 1170,
+        "duration": 30,
+        "visual": "The black screen from the intro returns. The alarm clock icon reappears. The time shifts from the previous time to \"5:00 AM.\" The alarm goes off. A hand reaches for it, but this time, it swipes up to dismiss, and the hand pulls back. The screen cuts to black. On the black, a single text line: \"BE THE ARCHITECT.\" The video ends."
+      }
+    ]
   }
 }
