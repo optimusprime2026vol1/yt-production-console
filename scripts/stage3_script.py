@@ -60,6 +60,12 @@ For every section, include a **VO:** block (the exact words to be spoken)
 and a **Visual:** block (what's on screen - no AI imagery of real
 identifiable people, no copyrighted characters or footage).
 
+Timestamp rules (these are parsed by code afterward, so precision matters):
+- Every section's start timestamp must exactly equal the previous
+  section's end timestamp. Never restart from 00:00 partway through.
+- The very last section's end timestamp must exactly equal the target
+  total video length given above.
+
 Hard rules:
 - Never fabricate statistics, quotes, or attributions. Use soft language
   ("research suggests", "many report") for anything not independently
