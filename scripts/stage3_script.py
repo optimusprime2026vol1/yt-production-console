@@ -6,6 +6,11 @@ For each topic cycle whose approved candidate doesn't have a script yet,
 asks Claude (Bedrock or direct API, see llm_client.py) to write the full
 production script, then writes it to scripts-content/{id}.md.
 
+Target runtime is configurable per candidate via "targetMinutes" (defaults
+to 18 for a full-length video). Short test candidates can set e.g.
+targetMinutes: 3 to get a fast end-to-end pipeline test without waiting
+on a full-length render every time.
+
 Required: LLM credentials (see llm_client.py)
 Reads: data/topic-cycles.json
 Writes: scripts-content/{id}.md, data/pipeline-state.json
@@ -21,17 +26,35 @@ TOPICS_PATH = "data/topic-cycles.json"
 STATE_PATH = "data/pipeline-state.json"
 SCRIPTS_DIR = "scripts-content"
 
-SCRIPT_SPEC = """Write a full production script for a 16-20 minute faceless
-YouTube video, following this exact structure with timestamp markers:
+
+def build_script_spec(minutes):
+    if minutes >= 10:
+        return f"""Write a full production script for a {minutes}-minute
+faceless YouTube video, following this exact structure with timestamp markers:
 
 [00:00-00:30] COLD OPEN - provocative hook, mid-scene or mid-tension, no
 "hey guys welcome back". Promise a concrete payoff.
 [00:30-02:00] CONTEXT / STAKES - why this matters now, plant a curiosity gap.
-[02:00-14:00] BODY - 3 to 5 acts, each with a timestamp range, a core idea,
-a concrete example, and a pattern interrupt every 45-90 seconds.
-[14:00-17:00] TURN / REFRAME - the core insight, tie back to the hook.
-[17:00-19:00] ACTIONABLE TAKEAWAY - 2-3 concrete, specific actions.
-[19:00-19:30] CLOSE + CTA - callback to the opening hook, one clear CTA.
+[02:00-{minutes - 5:02d}:00] BODY - 3 to 5 acts, each with a timestamp range,
+a core idea, a concrete example, and a pattern interrupt every 45-90 seconds.
+[{minutes - 5:02d}:00-{minutes - 2:02d}:00] TURN / REFRAME - the core insight, tie back to the hook.
+[{minutes - 2:02d}:00-{minutes - 1:02d}:00] ACTIONABLE TAKEAWAY - 2-3 concrete, specific actions.
+[{minutes - 1:02d}:00-{minutes:02d}:00] CLOSE + CTA - callback to the opening hook, one clear CTA."""
+    # Short-form: same beats, no room for multiple acts.
+    body_end = max(minutes - 1, 1)
+    return f"""Write a full script for a {minutes}-minute faceless YouTube
+video, following this compressed structure with timestamp markers:
+
+[00:00-00:15] COLD OPEN - a hook, mid-scene or a provocative question, no
+"hey guys welcome back". Promise a concrete payoff.
+[00:15-00:35] CONTEXT - one or two sentences on why this matters now.
+[00:35-0{body_end}:00] BODY - ONE clear idea with a concrete example - this
+is a short video, don't try to cram in multiple acts.
+[0{body_end}:00-{minutes:02d}:00] TAKEAWAY + CLOSE - one specific action step,
+then a callback to the hook and a single clear CTA."""
+
+
+SCRIPT_FOOTER = """
 
 For every section, include a **VO:** block (the exact words to be spoken)
 and a **Visual:** block (what's on screen - no AI imagery of real
@@ -83,8 +106,9 @@ def main():
         if not candidate:
             continue
 
-        print(f"Generating script for: {candidate['title']}")
-        prompt = f"""{SCRIPT_SPEC}
+        minutes = candidate.get("targetMinutes", 18)
+        print(f"Generating {minutes}-minute script for: {candidate['title']}")
+        prompt = f"""{build_script_spec(minutes)}{SCRIPT_FOOTER}
 
 Video title: {candidate['title']}
 Core angle: {candidate['angle']}
