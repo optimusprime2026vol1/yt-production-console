@@ -3,9 +3,10 @@
 Stage 4 - Voiceover.
 
 Tries ElevenLabs first (if ELEVENLABS_API_KEY is set) - better quality,
-but has a character quota. Falls back to Piper TTS otherwise: fully
-offline, no API key, no character limit, since it runs entirely inside
-the GitHub Actions runner instead of calling an external service.
+but has a character quota. Falls back to Piper TTS otherwise (or if
+ElevenLabs fails partway through, e.g. quota exceeded): fully offline, no
+API key, no character limit, since it runs entirely inside the GitHub
+Actions runner instead of calling an external service.
 
 Piper: pip-installed in the workflow, voice model downloaded once from
 Hugging Face (~60MB), synthesizes the whole script in one pass - no
@@ -15,6 +16,7 @@ Reads: data/pipeline-state.json, scripts-content/{id}.md
 Writes: assets/{id}/voiceover-part1.mp3 (+ partN.mp3 if ElevenLabs chunks
         it), data/pipeline-state.json
 """
+import glob
 import json
 import os
 import re
@@ -165,12 +167,20 @@ def main():
 
         out_dir = os.path.join(ASSETS_DIR, topic_id)
         os.makedirs(out_dir, exist_ok=True)
+        for stale in glob.glob(os.path.join(out_dir, "voiceover-part*.mp3")):
+            os.remove(stale)  # clear any partial output from a prior failed attempt
 
+        part_count = None
         if ELEVENLABS_API_KEY:
             print("  Using ElevenLabs")
-            part_count = run_elevenlabs(vo_blocks, out_dir)
-        else:
-            print("  No ELEVENLABS_API_KEY - using Piper (local, free, no quota)")
+            try:
+                part_count = run_elevenlabs(vo_blocks, out_dir)
+            except Exception as exc:
+                print(f"  ElevenLabs failed ({exc}) - falling back to Piper")
+                for stale in glob.glob(os.path.join(out_dir, "voiceover-part*.mp3")):
+                    os.remove(stale)  # clear partial output from the failed attempt
+        if part_count is None:
+            print("  Using Piper (local, free, no quota)")
             part_count = run_piper(vo_blocks, out_dir)
 
         entry["voiceoverReady"] = True
