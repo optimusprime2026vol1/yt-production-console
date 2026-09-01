@@ -7,9 +7,16 @@ asks Claude (Bedrock or direct API, see llm_client.py) to write the full
 production script, then writes it to scripts-content/{id}.md.
 
 Target runtime is configurable per candidate via "targetMinutes" (defaults
-to 18 for a full-length video). Short test candidates can set e.g.
-targetMinutes: 3 to get a fast end-to-end pipeline test without waiting
-on a full-length render every time.
+to 18 for a full-length video). Language is configurable via "language"
+(defaults to "English").
+
+New gate: after a script is generated, it sits at scriptApproved=null
+(pending human review) and Stages 4/5 (voiceover, visuals) will NOT touch
+it until scriptApproved is explicitly true. If a human rejects it
+(scriptApproved=false, with a scriptRejectionNote), this stage regenerates
+the script incorporating that note, then resets to pending again. This
+catches problems - wrong language, wrong tone - at the cheap script stage
+instead of after a full render.
 
 Required: LLM credentials (see llm_client.py)
 Reads: data/topic-cycles.json
@@ -67,6 +74,9 @@ Timestamp rules (these are parsed by code afterward, so precision matters):
   total video length given above.
 
 Hard rules:
+- Write the ENTIRE script - VO and Visual blocks both - in {language}.
+  This is not optional; do not default to English if {language} is set
+  to something else.
 - Never fabricate statistics, quotes, or attributions. Use soft language
   ("research suggests", "many report") for anything not independently
   verifiable, or cut the claim.
@@ -77,7 +87,10 @@ Hard rules:
 Format the whole thing as markdown, matching this structure exactly so it
 can be parsed programmatically later: section headers as
 "## [MM:SS-MM:SS] NAME", VO as "**VO:**" followed by the spoken text,
-Visual as "**Visual:**" followed by the description."""
+Visual as "**Visual:**" followed by the description. Keep the section
+header names and timestamps themselves in this exact English/numeric
+format regardless of {language}, since code parses them - only the VO and
+Visual content itself needs to be in {language}."""
 
 
 def load_json(path, default):
@@ -106,19 +119,36 @@ def main():
         if cycle.get("status") != "decided" or not cycle.get("approvedId"):
             continue
         topic_id = cycle["approvedId"]
-        if state.get(topic_id, {}).get("scriptGenerated"):
+        entry = state.get(topic_id, {})
+
+        # Skip if: never generated yet -> proceed below.
+        # Skip if: generated AND not explicitly rejected (pending review or
+        # already approved) -> nothing to do here, wait for a human.
+        # Proceed (regenerate) if: explicitly rejected (scriptApproved is
+        # exactly False), incorporating the rejection note.
+        if entry.get("scriptGenerated") and entry.get("scriptApproved") is not False:
             continue
+
         candidate = next((c for c in cycle["candidates"] if c["id"] == topic_id), None)
         if not candidate:
             continue
 
         minutes = candidate.get("targetMinutes", 18)
-        print(f"Generating {minutes}-minute script for: {candidate['title']}")
-        prompt = f"""{build_script_spec(minutes)}{SCRIPT_FOOTER}
+        language = candidate.get("language", "English")
+        rejection_note = entry.get("scriptRejectionNote")
+
+        print(f"Generating {minutes}-minute {language} script for: {candidate['title']}")
+        prompt = f"""{build_script_spec(minutes)}{SCRIPT_FOOTER.format(language=language)}
 
 Video title: {candidate['title']}
 Core angle: {candidate['angle']}
 Target keyword: {candidate.get('keyword', '')}"""
+
+        if rejection_note:
+            prompt += f"""
+
+A previous draft of this script was reviewed and rejected for this
+reason - address it directly in this version: {rejection_note}"""
 
         script_text = call_claude(prompt, max_tokens=6000)
         os.makedirs(SCRIPTS_DIR, exist_ok=True)
@@ -126,11 +156,14 @@ Target keyword: {candidate.get('keyword', '')}"""
         with open(out_path, "w") as f:
             f.write(script_text)
 
-        state.setdefault(topic_id, {})["scriptGenerated"] = True
-        state[topic_id]["title"] = candidate["title"]
-        state[topic_id]["scriptPath"] = out_path
+        entry["scriptGenerated"] = True
+        entry["scriptApproved"] = None  # pending human review
+        entry["scriptRejectionNote"] = None
+        entry["title"] = candidate["title"]
+        entry["scriptPath"] = out_path
+        state[topic_id] = entry
         save_json(STATE_PATH, state)
-        print(f"Wrote {out_path}")
+        print(f"Wrote {out_path} - awaiting script approval before voice/visuals proceed")
 
 
 if __name__ == "__main__":
