@@ -16,16 +16,22 @@ correct for the InvokeModel API from AWS's own model-card docs). Override
 it if your account/region needs a different id or inference-profile id
 (e.g. a "us." prefix). Optional: AWS_REGION (default us-east-1).
 
+NOTE: GitHub Actions sets a secret-backed env var to an EMPTY STRING (not
+unset) when the secret doesn't exist. os.environ.get(key, default) only
+falls back to default when the key is truly absent, not when it's "" - so
+plain .get() with a default silently breaks here. Every optional value
+below uses `or` instead, which treats "" the same as unset.
+
 Required for direct API: ANTHROPIC_API_KEY.
 """
 import os
 
 import requests
 
-BEDROCK_API_KEY = os.environ.get("BEDROCK_API_KEY")
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-sonnet-4-6")
-AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+BEDROCK_API_KEY = os.environ.get("BEDROCK_API_KEY") or None
+BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID") or "anthropic.claude-sonnet-4-6"
+AWS_REGION = os.environ.get("AWS_REGION") or "us-east-1"
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or None
 
 
 def has_llm_credentials():
