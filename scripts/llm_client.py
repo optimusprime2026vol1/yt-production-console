@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """
-Shared Claude client - routes to AWS Bedrock (via the Mantle OpenAI-
-compatible gateway) if BEDROCK_API_KEY is set, otherwise falls back to the
-direct Anthropic API via ANTHROPIC_API_KEY.
+Shared Claude client - routes to standard AWS Bedrock (InvokeModel API) if
+BEDROCK_API_KEY is set, otherwise falls back to the direct Anthropic API
+via ANTHROPIC_API_KEY.
 
-Bedrock/Mantle only needs the API key - no separate model/inference-profile
-ID lookup required, since Mantle takes a plain model name in an
-OpenAI-Chat-Completions-shaped request. Optional: BEDROCK_MODEL_ID to
-override the default model, AWS_REGION (default us-east-1).
+This uses Bedrock's InvokeModel endpoint directly (not the Mantle gateway):
+POST https://bedrock-runtime.{region}.amazonaws.com/model/{model_id}/invoke
+with the native Anthropic Messages body shape plus "anthropic_version".
+
+Auth is AWS's bearer-token Bedrock API key (from the Bedrock console's
+"API keys" page) - not full SigV4/IAM access-key signing.
+
+BEDROCK_MODEL_ID defaults to "anthropic.claude-sonnet-4-6" (confirmed
+correct for the InvokeModel API from AWS's own model-card docs). Override
+it if your account/region needs a different id or inference-profile id
+(e.g. a "us." prefix). Optional: AWS_REGION (default us-east-1).
 
 Required for direct API: ANTHROPIC_API_KEY.
 """
@@ -28,14 +35,14 @@ def has_llm_credentials():
 def missing_credentials_message():
     return (
         "No LLM credentials configured. Set either "
-        "BEDROCK_API_KEY (Bedrock, via Mantle) "
+        "BEDROCK_API_KEY (standard AWS Bedrock) "
         "or ANTHROPIC_API_KEY (direct Anthropic API)."
     )
 
 
 def call_claude(prompt, max_tokens=2000):
     if BEDROCK_API_KEY:
-        return _call_bedrock_mantle(prompt, max_tokens)
+        return _call_bedrock(prompt, max_tokens)
     if ANTHROPIC_API_KEY:
         return _call_anthropic_direct(prompt, max_tokens)
     raise RuntimeError(missing_credentials_message())
@@ -60,22 +67,24 @@ def _call_anthropic_direct(prompt, max_tokens):
     return resp.json()["content"][0]["text"]
 
 
-def _call_bedrock_mantle(prompt, max_tokens):
-    # Mantle is OpenAI-Chat-Completions-compatible: plain model name, no
-    # inference-profile ID needed.
-    url = f"https://bedrock-mantle.{AWS_REGION}.api.aws/v1/chat/completions"
+def _call_bedrock(prompt, max_tokens):
+    url = (
+        f"https://bedrock-runtime.{AWS_REGION}.amazonaws.com"
+        f"/model/{BEDROCK_MODEL_ID}/invoke"
+    )
     resp = requests.post(
         url,
         headers={
             "Authorization": f"Bearer {BEDROCK_API_KEY}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
         },
         json={
-            "model": BEDROCK_MODEL_ID,
+            "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=180,
     )
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    return resp.json()["content"][0]["text"]
