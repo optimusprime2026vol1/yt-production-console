@@ -8,6 +8,16 @@ depends on the script existing - not on voiceover being ready, since
 sourcing visuals doesn't need audio to already exist. (Stage 6, the
 render, is what needs both to be ready.)
 
+Section parsing is two-step: first find every ## or ### timestamped
+header, then take each header's own text block (up to the NEXT header,
+whichever level) and look for a **Visual:** cue only within that block.
+This matters because a script has both outer "## BODY" umbrella headers
+and inner "### ACT ONE" sub-headers - a single-pass regex can accidentally
+tunnel from an outer header past its own sub-headers to grab a sub-section's
+Visual text, mislabeling it with the outer header's much longer timestamp
+range. The umbrella header's own block (empty, just its sub-headers) has no
+Visual of its own and is correctly skipped instead of producing a bad entry.
+
 Required secret: PEXELS_API_KEY
 Reads: data/pipeline-state.json, scripts-content/{id}.md
 Writes: assets/{id}/broll/section-N.mp4, assets/{id}/broll/credits.json
@@ -23,11 +33,9 @@ PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY") or None
 STATE_PATH = "data/pipeline-state.json"
 ASSETS_DIR = "assets"
 
-SECTION_RE = re.compile(
-    r"##\s*\[(\d{2}):(\d{2})[-\u2013](\d{2}):(\d{2})\][^\n]*\n"
-    r"(?:.*?\*\*VO:\*\*\s*\n.*?)?"
-    r"\*\*Visual:\*\*\s*\n(.*?)(?=\n##|\n---|\Z)",
-    re.DOTALL,
+HEADER_RE = re.compile(
+    r"^#{2,3}\s*\[(\d{2}):(\d{2})[-\u2013](\d{2}):(\d{2})\][^\n]*$",
+    re.MULTILINE,
 )
 
 
@@ -46,16 +54,24 @@ def save_json(path, data):
 
 
 def parse_sections(script_text):
+    headers = list(HEADER_RE.finditer(script_text))
     sections = []
-    for m in SECTION_RE.finditer(script_text):
+    for i, m in enumerate(headers):
         start = int(m.group(1)) * 60 + int(m.group(2))
         end = int(m.group(3)) * 60 + int(m.group(4))
-        visual_desc = m.group(5).strip()
+        block_start = m.end()
+        block_end = headers[i + 1].start() if i + 1 < len(headers) else len(script_text)
+        block = script_text[block_start:block_end]
+
+        visual_match = re.search(r"\*\*Visual:\*\*\s*\n(.*?)(?=\n---|\Z)", block, re.DOTALL)
+        if not visual_match:
+            continue  # umbrella header (e.g. "## BODY") with no direct Visual of its own
+
         sections.append({
             "start": start,
             "end": end,
             "duration": max(end - start, 1),
-            "visual": visual_desc,
+            "visual": visual_match.group(1).strip(),
         })
     return sections
 
