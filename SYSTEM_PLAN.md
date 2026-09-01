@@ -1,9 +1,10 @@
 # System plan — automated production pipeline
 
-Status: **full bridge built, end-to-end untested** — every stage below has
-working code pushed to this repo. None of it has run against real
-credentials yet. Add secrets per `CREDENTIALS.md`, then run the `Pipeline`
-workflow manually and read the Actions logs before trusting any stage.
+Status: **stages 1, 3, and 5 confirmed working end-to-end with real
+credentials and real output.** Stage 4 (voiceover) is confirmed working
+via Piper fallback (ElevenLabs works too, up to its character quota).
+Stages 6, 8, 9 are built and syntax-checked but not yet run to completion.
+See the table below for the honest per-stage status.
 
 ## Design principle: automation between gates, humans at gates
 
@@ -20,82 +21,95 @@ Publish is built as a **completely separate workflow**
 It is never called by the `Pipeline` workflow, never scheduled, and never
 will be — that's not a temporary gap, it's the point.
 
-## Why GitHub Actions, not vidIQ, for this track
+## LLM and voice backends (each stage tries in order, first available wins)
 
-Everything done earlier in this project via vidIQ (voiceover, trend data,
-thumbnails) only works from inside a Claude conversation over MCP — a
-GitHub Actions runner can't reach that. This automated track is built on
-public, documented APIs instead: YouTube Data API, Anthropic API,
-ElevenLabs, Pexels. The vidIQ-in-chat workflow still exists as a manual/
-assisted alternative; this is the unattended one.
+- **Script/metadata/research (Stages 1, 3, 8):** DeepSeek → AWS Bedrock →
+  direct Anthropic API. Configured via `scripts/llm_client.py`. DeepSeek
+  is currently the one actually being used (only DeepSeek credentials are
+  set as of this writing).
+- **Voiceover (Stage 4):** ElevenLabs → Piper TTS (local, free, no quota,
+  runs inside the GitHub Actions runner itself — see
+  `scripts/stage4_voiceover.py`). If ElevenLabs fails partway (e.g. quota
+  exceeded), it automatically falls back to Piper for that run rather than
+  failing the stage.
 
-## Pipeline stages — all built
+## Pipeline stages — real status
 
-| # | Stage | Script | Trigger | Credential | Status |
-|---|---|---|---|---|---|
-| 1 | Trend research | `scripts/trend_research.py` | Pipeline workflow | `YOUTUBE_API_KEY` + `ANTHROPIC_API_KEY` | Built, previously test-run successfully |
-| 2 | **Topic approval (human)** | — dashboard — | dashboard click | — | Built (local-storage version; repo-JSON version pending, see below) |
-| 3 | Script generation | `scripts/stage3_script.py` | Pipeline workflow | `ANTHROPIC_API_KEY` | Built, untested |
-| 4 | Voiceover | `scripts/stage4_voiceover.py` | Pipeline workflow | `ELEVENLABS_API_KEY` | Built, untested |
-| 5 | Visual sourcing | `scripts/stage5_visuals.py` | Pipeline workflow | `PEXELS_API_KEY` | Built, untested |
-| 6 | Edit & render | `scripts/stage6_render.py` | Pipeline workflow | none (ffmpeg) | Built, untested. Baseline assembly only — see "Known limitations" |
-| 7 | **QC review (human)** | — dashboard — | dashboard click | — | Built (local-storage version) |
-| 8 | Metadata & titles | `scripts/stage8_metadata.py` | Pipeline workflow | `ANTHROPIC_API_KEY` | Built, untested. No thumbnail yet — no image-gen credential in checklist |
-| 9 | **Publish (human-triggered only)** | `scripts/publish_video.py` | separate `publish.yml`, manual only | `YOUTUBE_OAUTH_*` | Built, untested. Never wired to schedule or Pipeline |
-| 10 | Analytics | — not built — | heartbeat (future) | `YOUTUBE_API_KEY` | Not started |
+| # | Stage | Script | Credential(s) | Status |
+|---|---|---|---|---|
+| 1 | Trend research | `scripts/trend_research.py` | `YOUTUBE_API_KEY` + one LLM credential | Built. Runs cleanly when its secrets are set; skips cleanly otherwise |
+| 2 | **Topic approval (human)** | — dashboard — | — | Built. Dashboard now fetches live `data/topic-cycles.json` from the repo (see "Dashboard sync" below) |
+| 3 | Script generation | `scripts/stage3_script.py` | one LLM credential | **Confirmed working** — real ~2,850-word script generated via DeepSeek for the approved topic, following the full structure spec with a fact-check log |
+| 4 | Voiceover | `scripts/stage4_voiceover.py` | `ELEVENLABS_API_KEY` (optional) | **Confirmed working** — Piper fallback produces a full voiceover with no quota limit; ElevenLabs path also confirmed (partial, quota-limited on the free tier) |
+| 5 | Visual sourcing | `scripts/stage5_visuals.py` | `PEXELS_API_KEY` | **Confirmed working** — 10 real broll clips downloaded and correctly time-matched to script sections (after fixing a header-parsing bug that originally mislabeled one section's duration) |
+| 6 | Edit & render | `scripts/stage6_render.py` | none (ffmpeg) | Built, not yet run to completion. Depends on Stage 4 + 5 both being ready in the same pipeline-state entry |
+| 7 | **QC review (human)** | — dashboard — | — | Built. Dashboard now fetches live `data/qc-queue.json` from the repo |
+| 8 | Metadata & titles | `scripts/stage8_metadata.py` | one LLM credential | Built, not yet run — needs a QC-approved video first, which needs Stage 6 to have produced one |
+| 9 | **Publish (human-triggered only)** | `scripts/publish_video.py` | `YOUTUBE_OAUTH_*` | Built, untested. Never wired to schedule or Pipeline |
+| 10 | Analytics | — not built — | heartbeat (future) | Not started |
+
+## Dashboard sync (new)
+
+`index.html` now fetches `data/topic-cycles.json` and `data/qc-queue.json`
+live from `raw.githubusercontent.com` on load, instead of using hardcoded
+seed data. Any topic Stage 1 generates or video Stage 6 renders shows up
+automatically next time the dashboard is opened. Human decisions (approve
+a topic, pass/flag a checklist item) still save to browser local storage
+only — writing a decision back into the repo itself still isn't wired up,
+since that needs either a user-supplied GitHub token entered client-side
+or a small backend, neither built yet. Practically: the dashboard always
+shows the pipeline's latest output, and your own decisions persist on
+whichever device/browser you made them on.
 
 ## How the Pipeline workflow chains stages
 
-One workflow (`pipeline.yml`), one manual trigger for now, runs stages
-1→3→4→5→6→8 as sequential steps in a single job. Each stage script checks
-its own preconditions (does a decided-but-unscripted topic exist? does a
-scripted-but-unvoiced video exist?) and silently no-ops if nothing's ready
-or its secret is missing — so partial credential rollout never breaks the
-run, it just does less. State lives in `data/pipeline-state.json` (per-video
-booleans: scriptGenerated, voiceoverReady, visualsReady, rendered,
-metadataReady, readyToPublish), plus the existing `data/topic-cycles.json`
-and `data/qc-queue.json`.
+One workflow (`pipeline.yml`), manual trigger for now, runs stages
+1→3→4→5→6→8 as sequential steps in a single job, each with
+`continue-on-error: true` so one stage failing doesn't discard work an
+earlier, independent stage already did in the same run — the final commit
+step runs with `if: always()` for the same reason. Each stage script
+checks its own preconditions and silently no-ops if nothing's ready or
+its secret is missing. State lives in `data/pipeline-state.json`
+(per-video booleans: scriptGenerated, voiceoverReady, visualsReady,
+rendered, metadataReady, readyToPublish).
 
 ## Known limitations (read before trusting a run)
 
 - **Stage 6 render is a baseline, not the full blueprint edit.** It
   concatenates broll per section and lays voiceover on top. No cut-on-
   rhythm, no captions, no lower-thirds, no pattern-break at 8–10 minutes.
-  Those are real, well-scoped next additions (the timing data already
-  exists in the script) — not implemented now because a rushed version
-  would look broken rather than simply basic.
-- **No thumbnail generation.** Stage 8 does titles/description/tags only.
-  Add an image-gen credential to extend it, or keep using vidIQ-in-chat for
-  thumbnails specifically — it's genuinely strong at that.
+- **No thumbnail generation in the pipeline.** Stage 8 does titles/
+  description/tags only. A real thumbnail was generated manually via
+  vidIQ earlier in this project and archived to `assets/t2-thumbnail-v1.png`
+  — extending Stage 8 with an image-gen credential is the automatable path.
 - **Render resolution is 1080p, not 4K**, to keep CI render time reasonable
   on a shared runner.
-- **Script-parsing regexes assume Claude's output matches the requested
-  markdown structure exactly.** If Stage 3's output drifts from spec,
-  Stages 5/6 will find zero sections and just skip — check Action logs.
-- **The dashboard still uses per-browser local storage**, not
-  `data/topic-cycles.json` / `data/qc-queue.json`. The automated pipeline
-  writes to the repo files; the dashboard doesn't read them yet. Until that
-  migration happens, treat the dashboard and the repo JSON as two views you
-  reconcile manually, and check the JSON files directly in the repo to see
-  what the pipeline actually produced.
-- **Nothing here has run once.** Every stage compiles and follows documented
-  API shapes, but none of it has touched a real API key. Expect to debug
-  from Action logs on the first few runs.
+- **GitHub Actions sets a secret-backed env var to an empty string (not
+  unset) when the secret doesn't exist.** Any code using
+  `os.environ.get(key, default)` gets `""`, not `default`, in that case —
+  every optional value in this codebase now uses `os.environ.get(key) or
+  default` instead. Worth remembering if adding new optional secrets.
+- **Dashboard decisions don't write back to the repo** — see "Dashboard
+  sync" above.
 
 ## Repo structure
 
 ```
 .github/workflows/pipeline.yml   stages 1,3,4,5,6,8 - manual now, heartbeat later
 .github/workflows/publish.yml    stage 9 - always manual, never scheduled
+scripts/llm_client.py            shared LLM router: DeepSeek -> Bedrock -> direct API
 scripts/                         one file per stage
 data/                            topic-cycles.json, qc-queue.json, pipeline-state.json
 scripts-content/                 generated video scripts (stage 3 output)
 assets/{id}/                     voiceover-*.mp3, broll/, render.mp4, metadata.json
+index.html                       dashboard - now syncs live from data/*.json
 CREDENTIALS.md                   ordered secrets checklist
 ```
 
-## Suggested first test, once secrets are in
+## Suggested next test
 
-Run the Pipeline workflow manually and watch the Actions log for each
-step's print statements — every script logs what it's skipping and why.
-Check `data/pipeline-state.json` after the run to see how far it got.
+Once ElevenLabs (or Piper, already working) produces voiceover and
+visuals exist for a video, run the Pipeline workflow again and check
+whether Stage 6 successfully produces `assets/{id}/render.mp4` and adds
+an entry to `data/qc-queue.json`. Then open the dashboard to confirm the
+video shows up there automatically.
