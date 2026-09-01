@@ -19,6 +19,13 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install requests piper-tts
+      - name: Ensure ffmpeg is available
+        run: |
+          if ! command -v ffmpeg &> /dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ffmpeg
+          fi
+          ffmpeg -version | head -1
 
       # Each stage below has continue-on-error: true. One stage failing
       # (e.g. a bad credential) should not throw away work a different,
