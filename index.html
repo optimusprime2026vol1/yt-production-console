@@ -114,6 +114,7 @@
   .approve-topic-btn.is-winner{background:var(--green-dim); border-color:var(--green); color:var(--green); cursor:default;}
   .approve-topic-btn.is-loser{background:none; border-color:var(--border); color:var(--text-faint); cursor:default;}
   .approve-topic-btn:disabled{cursor:default;}
+  .sync-note{font-size:11px; color:var(--text-faint); padding:10px 16px 0;}
 </style>
 </head>
 <body>
@@ -136,9 +137,14 @@
 <script>
 const TOPIC_KEY = 'topic-cycles';
 const QC_KEY = 'qc-queue';
+const REPO_RAW_BASE = 'https://raw.githubusercontent.com/optimusprime2026vol1/yt-production-console/main/data';
 
-/* Local, per-browser storage. Each device/browser that opens this page keeps its
-   own copy of the queue — there is no shared backend behind this static page. */
+/* Local, per-browser storage for decisions made in this dashboard (approve
+   a topic, pass/flag a checklist item). The pipeline's own output (new
+   shortlists from Stage 1, new videos from Stage 6) lives in the repo's
+   data/*.json files and is fetched live below, then merged with any local
+   decisions so an approval made here isn't lost even though writing a
+   decision back into the repo isn't wired up yet - see SYSTEM_PLAN.md. */
 const store = {
   get(key) {
     const v = localStorage.getItem(key);
@@ -151,112 +157,74 @@ const store = {
   },
 };
 
-const SEED_CYCLES = [
-  {
-    id: 'c1',
-    generated: new Date().toISOString().slice(0, 10),
-    status: 'pending',
-    approvedId: null,
-    candidates: [
-      {
-        id: 't1',
-        title: "I Studied David Goggins for 30 Days. Here's What Changed.",
-        angle: 'Discipline as identity, not motivation — modeled on a real case study',
-        keyword: 'goggins motivation, self discipline',
-        volume: '98k/mo — fastest-rising angle, +95% week over week',
-        competition: 'Moderate — breakout videos from 1k–10k sub channels hitting 20–35k views',
-      },
-      {
-        id: 't2',
-        title: "The Real Reason You Have No Discipline (It's Not Willpower)",
-        angle: 'Reframing discipline as systems and identity, not willpower',
-        keyword: 'discipline, self discipline',
-        volume: '768k/mo — highest-volume keyword in the niche',
-        competition: 'Score 39/100 — high volume but underexploited for its size',
-      },
-      {
-        id: 't3',
-        title: '"Just Be Disciplined" Advice Doesn\'t Work — Here\'s What Does',
-        angle: 'Practical systems over generic advice, targeting a specific long-tail search',
-        keyword: 'how to be disciplined, self discipline',
-        volume: '77k/mo, opportunity score 68/100',
-        competition: 'Score 39/100 — several small-creator breakouts already validate demand',
-      },
-    ],
-  },
-];
-
-const SEED_QUEUE = [
-  {
-    id: 'v1',
-    title: 'He Lost Everything at 34. What He Did Next Changed Everything.',
-    topic: 'Reframing failure as data, not identity',
-    stage: 'pending',
-    runtime: '17:42', loudness: '-16.1 LUFS', resolution: '3840×2160',
-    checklist: [
-      { id: 'hook', label: 'Hook lands in the first 30 seconds — not a generic "welcome back"', status: 'pending', note: '' },
-      { id: 'facts', label: 'Claims are accurate, sourced, or softened where unverifiable', status: 'pending', note: '' },
-      { id: 'thumb', label: 'Title and thumbnail represent the actual content, no bait-and-switch', status: 'pending', note: '' },
-      { id: 'tone', label: 'Tone and framing fit brand voice and niche boundaries', status: 'pending', note: '' },
-      { id: 'visuals', label: 'Visuals feel distinct, not generic AI stock', status: 'pending', note: '' },
-      { id: 'pacing', label: 'Pacing holds — no dead stretch in the body section', status: 'pending', note: '' },
-      { id: 'cta', label: 'Close and CTA land naturally, single clear ask', status: 'pending', note: '' },
-    ],
-    history: [],
-  },
-  {
-    id: 'v2',
-    title: 'The 6-Minute Morning Routine of People Who Never Burn Out',
-    topic: 'Sustainable discipline over willpower spikes',
-    stage: 'pending',
-    runtime: '14:05', loudness: '-15.8 LUFS', resolution: '3840×2160',
-    checklist: [
-      { id: 'hook', label: 'Hook lands in the first 30 seconds — not a generic "welcome back"', status: 'pending', note: '' },
-      { id: 'facts', label: 'Claims are accurate, sourced, or softened where unverifiable', status: 'pending', note: '' },
-      { id: 'thumb', label: 'Title and thumbnail represent the actual content, no bait-and-switch', status: 'pending', note: '' },
-      { id: 'tone', label: 'Tone and framing fit brand voice and niche boundaries', status: 'pending', note: '' },
-      { id: 'visuals', label: 'Visuals feel distinct, not generic AI stock', status: 'pending', note: '' },
-      { id: 'pacing', label: 'Pacing holds — no dead stretch in the body section', status: 'pending', note: '' },
-      { id: 'cta', label: 'Close and CTA land naturally, single clear ask', status: 'pending', note: '' },
-    ],
-    history: [],
-  },
-];
-
 let activeTab = 'topics';
 let cycles = [];
 let activeCycleId = null;
 let queue = [];
 let activeVideoId = null;
+let repoSyncOk = false;
+
+async function fetchRepoJSON(filename) {
+  const resp = await fetch(`${REPO_RAW_BASE}/${filename}?_=${Date.now()}`, { cache: 'no-store' });
+  if (!resp.ok) throw new Error(`${filename}: ${resp.status}`);
+  return resp.json();
+}
+
+function mergeCycles(repoList, localList) {
+  const localMap = new Map(localList.map(c => [c.id, c]));
+  return repoList.map(c => {
+    const local = localMap.get(c.id);
+    if (local && local.status === 'decided' && c.status !== 'decided') {
+      return { ...c, status: 'decided', approvedId: local.approvedId };
+    }
+    return c;
+  });
+}
+
+function mergeQueue(repoList, localList) {
+  const localMap = new Map(localList.map(v => [v.id, v]));
+  return repoList.map(v => {
+    const local = localMap.get(v.id);
+    if (local && (local.stage !== 'pending' || (local.history || []).length)) {
+      return { ...v, stage: local.stage, checklist: local.checklist, history: local.history };
+    }
+    return v;
+  });
+}
 
 async function loadAll() {
-  try {
-    const res = store.get(TOPIC_KEY);
-    cycles = JSON.parse(res.value);
-  } catch (e) {
-    cycles = SEED_CYCLES;
-    saveCycles();
-  }
-  activeCycleId = cycles.find(c => c.status === 'pending')?.id || cycles[0]?.id || null;
+  let localCycles = [];
+  try { localCycles = JSON.parse(store.get(TOPIC_KEY).value); } catch (e) { /* none saved yet */ }
+  let localQueue = [];
+  try { localQueue = JSON.parse(store.get(QC_KEY).value); } catch (e) { /* none saved yet */ }
 
   try {
-    const res2 = store.get(QC_KEY);
-    queue = JSON.parse(res2.value);
+    const [repoCycles, repoQueue] = await Promise.all([
+      fetchRepoJSON('topic-cycles.json'),
+      fetchRepoJSON('qc-queue.json'),
+    ]);
+    cycles = mergeCycles(repoCycles, localCycles);
+    queue = mergeQueue(repoQueue, localQueue);
+    repoSyncOk = true;
   } catch (e) {
-    queue = SEED_QUEUE;
-    saveQueue();
+    console.warn('Repo sync failed, using local data only:', e);
+    cycles = localCycles;
+    queue = localQueue;
+    repoSyncOk = false;
   }
+
+  activeCycleId = cycles.find(c => c.status === 'pending')?.id || cycles[0]?.id || null;
   activeVideoId = queue.find(v => v.stage === 'pending')?.id || queue[0]?.id || null;
 
   render();
 }
 
 function saveCycles() {
-  try { store.set(TOPIC_KEY, JSON.stringify(cycles)); setStatus('saved on this device'); }
+  try { store.set(TOPIC_KEY, JSON.stringify(cycles)); setStatus(repoSyncOk ? 'synced + saved on this device' : 'saved on this device'); }
   catch (e) { setStatus('save failed'); }
 }
 function saveQueue() {
-  try { store.set(QC_KEY, JSON.stringify(queue)); setStatus('saved on this device'); }
+  try { store.set(QC_KEY, JSON.stringify(queue)); setStatus(repoSyncOk ? 'synced + saved on this device' : 'saved on this device'); }
   catch (e) { setStatus('save failed'); }
 }
 function setStatus(msg) { document.getElementById('statusTag').textContent = msg; }
@@ -282,7 +250,8 @@ function renderCounts_Topics() {
   const decided = cycles.filter(c => c.status === 'decided').length;
   document.getElementById('counts').innerHTML =
     `<span><b>${pending}</b> awaiting pick</span><span><b>${decided}</b> decided</span>`;
-  setStatus(pending ? 'shortlist ready' : 'no pending shortlist');
+  if (!repoSyncOk) setStatus('repo sync failed - local data only');
+  else setStatus(pending ? 'shortlist ready' : 'no pending shortlist');
 }
 
 function renderTopicsRail() {
@@ -304,7 +273,7 @@ function renderTopicsMain() {
   const main = document.getElementById('main');
   const c = cycles.find(x => x.id === activeCycleId);
   if (!c) {
-    main.innerHTML = `<div class="empty">No shortlist waiting.<br>Ask Claude to run trend research for a new set of 3 candidates.</div>` + footer();
+    main.innerHTML = `<div class="empty">No shortlist waiting.<br>Run the "Stage 1 - Trend research" or "Pipeline" GitHub Action to generate one.</div>` + footer();
     return;
   }
   main.innerHTML = `
@@ -356,7 +325,8 @@ function renderCounts_QC() {
   const returned = queue.filter(v => v.stage === 'returned').length;
   document.getElementById('counts').innerHTML =
     `<span><b>${pending}</b> pending</span><span><b>${approved}</b> approved</span><span><b>${returned}</b> returned</span>`;
-  setStatus(pending ? `${pending} awaiting review` : 'queue clear');
+  if (!repoSyncOk) setStatus('repo sync failed - local data only');
+  else setStatus(pending ? `${pending} awaiting review` : 'queue clear');
 }
 
 function renderQcRail() {
@@ -379,7 +349,7 @@ function stageLabel(s) { return s === 'pending' ? 'pending QC' : s === 'approved
 function renderQcMain() {
   const main = document.getElementById('main');
   const v = queue.find(x => x.id === activeVideoId);
-  if (!v) { main.innerHTML = `<div class="empty">No videos in the queue.</div>` + footer(); return; }
+  if (!v) { main.innerHTML = `<div class="empty">No videos in the queue yet.<br>Run the "Pipeline" GitHub Action once a topic is approved.</div>` + footer(); return; }
 
   const flagged = v.checklist.filter(i => i.status === 'flag');
   const allResolved = v.checklist.every(i => i.status === 'pass');
@@ -470,17 +440,14 @@ function setVerdict(v, stage) {
 /* ---------- shared ---------- */
 
 function footer() {
-  return `<div class="footer-row"><button class="reset-link" id="resetLink">Reset sample data</button></div>`;
+  return `<div class="footer-row"><button class="reset-link" id="resetLink">Clear local overrides &amp; re-sync</button></div>`;
 }
 
 async function resetAll() {
-  cycles = JSON.parse(JSON.stringify(SEED_CYCLES));
-  activeCycleId = cycles[0].id;
-  queue = JSON.parse(JSON.stringify(SEED_QUEUE));
-  activeVideoId = queue[0].id;
-  await saveCycles();
-  await saveQueue();
-  render();
+  localStorage.removeItem(TOPIC_KEY);
+  localStorage.removeItem(QC_KEY);
+  setStatus('re-syncing…');
+  await loadAll();
 }
 
 loadAll();
