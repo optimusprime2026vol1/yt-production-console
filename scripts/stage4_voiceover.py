@@ -59,8 +59,11 @@ def save_json(path, data):
 
 
 def extract_vo_text(script_markdown):
+    # VO text can appear right after "**VO:**" on the same line, or on the
+    # next line - the LLM's formatting varies, especially on shorter
+    # scripts. \s* (not \s*\n) handles both.
     blocks = re.findall(
-        r"\*\*VO:\*\*\s*\n(.*?)(?=\n\*\*Visual:\*\*|\Z)",
+        r"\*\*VO:\*\*\s*(.*?)(?=\n\*\*Visual:\*\*|\Z)",
         script_markdown,
         re.DOTALL,
     )
