@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install requests
+      - run: pip install requests piper-tts
 
       # Each stage below has continue-on-error: true. One stage failing
       # (e.g. a bad credential) should not throw away work a different,
@@ -50,6 +50,7 @@ jobs:
         continue-on-error: true
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          PIPER_VOICE: ${{ secrets.PIPER_VOICE }}
         run: python scripts/stage4_voiceover.py
 
       - name: Stage 5 - Visual sourcing
