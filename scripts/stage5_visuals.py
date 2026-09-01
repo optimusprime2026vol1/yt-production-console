@@ -8,6 +8,9 @@ depends on the script existing - not on voiceover being ready, since
 sourcing visuals doesn't need audio to already exist. (Stage 6, the
 render, is what needs both to be ready.)
 
+Requires scriptApproved=true (see stage3_script.py) - won't touch a
+script that hasn't been explicitly reviewed and approved by a human yet.
+
 Section parsing is two-step: first find every ## or ### timestamped
 header, then take each header's own text block (up to the NEXT header,
 whichever level) and look for a **Visual:** cue only within that block.
@@ -122,6 +125,8 @@ def main():
     for topic_id, entry in state.items():
         if not entry.get("scriptGenerated") or entry.get("visualsReady"):
             continue
+        if not entry.get("scriptApproved"):
+            continue  # waiting on human script review - see stage3_script.py
         script_path = entry.get("scriptPath")
         if not script_path or not os.path.exists(script_path):
             continue
