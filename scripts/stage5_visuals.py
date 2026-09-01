@@ -2,9 +2,11 @@
 """
 Stage 5 - Visual sourcing.
 
-For each scripted video with voiceover ready, reads each section's
-**Visual:** cue and section duration, and pulls a matching stock clip from
-Pexels for each one.
+For each scripted video, reads each section's **Visual:** cue and section
+duration, and pulls a matching stock clip from Pexels for each one. Only
+depends on the script existing - not on voiceover being ready, since
+sourcing visuals doesn't need audio to already exist. (Stage 6, the
+render, is what needs both to be ready.)
 
 Required secret: PEXELS_API_KEY
 Reads: data/pipeline-state.json, scripts-content/{id}.md
@@ -17,7 +19,7 @@ import sys
 
 import requests
 
-PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY") or None
 STATE_PATH = "data/pipeline-state.json"
 ASSETS_DIR = "assets"
 
@@ -94,7 +96,7 @@ def main():
     state = load_json(STATE_PATH, {})
 
     for topic_id, entry in state.items():
-        if not entry.get("voiceoverReady") or entry.get("visualsReady"):
+        if not entry.get("scriptGenerated") or entry.get("visualsReady"):
             continue
         script_path = entry.get("scriptPath")
         if not script_path or not os.path.exists(script_path):
