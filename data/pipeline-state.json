@@ -65,6 +65,10 @@
         "duration": 30,
         "visual": "The black screen from the intro returns. The alarm clock icon reappears. The time shifts from the previous time to \"5:00 AM.\" The alarm goes off. A hand reaches for it, but this time, it swipes up to dismiss, and the hand pulls back. The screen cuts to black. On the black, a single text line: \"BE THE ARCHITECT.\" The video ends."
       }
-    ]
+    ],
+    "voiceoverReady": true,
+    "voiceoverParts": 1,
+    "rendered": true,
+    "renderPath": "assets/t2/render.mp4"
   }
 }
