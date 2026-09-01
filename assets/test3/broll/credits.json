@@ -1,0 +1,30 @@
+[
+  {
+    "section": 1,
+    "query": "Dark background",
+    "photographer": "Hardlight: Overlays for Edits / iOS / Android",
+    "source_url": "https://www.pexels.com/video/close-up-on-in-black-suit-man-making-gesture-9862184/",
+    "duration_needed": 15
+  },
+  {
+    "section": 2,
+    "query": "clean infographic animation",
+    "photographer": "Monstera Production",
+    "source_url": "https://www.pexels.com/video/animation-of-risk-on-color-graph-5849652/",
+    "duration_needed": 20
+  },
+  {
+    "section": 3,
+    "query": "Split screen",
+    "photographer": "utopia 36",
+    "source_url": "https://www.pexels.com/video/monitors-and-audio-equipment-at-a-recording-studio-13283747/",
+    "duration_needed": 85
+  },
+  {
+    "section": 4,
+    "query": "hand pressing button labeled START",
+    "photographer": "Dominik Z\u00edtka",
+    "source_url": "https://www.pexels.com/video/close-up-of-hand-pressing-elevator-control-panel-buttons-31751326/",
+    "duration_needed": 60
+  }
+]

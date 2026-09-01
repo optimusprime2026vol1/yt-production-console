@@ -52,5 +52,59 @@
       }
     ],
     "history": []
+  },
+  {
+    "id": "test3",
+    "title": "The Two-Minute Rule That Fixes Procrastination",
+    "topic": "The Two-Minute Rule That Fixes Procrastination",
+    "stage": "pending",
+    "runtime": "2:50",
+    "loudness": "-16.64 LUFS",
+    "resolution": "1920x1080",
+    "checklist": [
+      {
+        "id": "hook",
+        "label": "Hook lands in the first 30 seconds - not a generic \"welcome back\"",
+        "status": "pending",
+        "note": ""
+      },
+      {
+        "id": "facts",
+        "label": "Claims are accurate, sourced, or softened where unverifiable",
+        "status": "pending",
+        "note": ""
+      },
+      {
+        "id": "thumb",
+        "label": "Title and thumbnail represent the actual content, no bait-and-switch",
+        "status": "pending",
+        "note": ""
+      },
+      {
+        "id": "tone",
+        "label": "Tone and framing fit brand voice and niche boundaries",
+        "status": "pending",
+        "note": ""
+      },
+      {
+        "id": "visuals",
+        "label": "Visuals feel distinct, not generic AI stock",
+        "status": "pending",
+        "note": ""
+      },
+      {
+        "id": "pacing",
+        "label": "Pacing holds - no dead stretch in the body section",
+        "status": "pending",
+        "note": ""
+      },
+      {
+        "id": "cta",
+        "label": "Close and CTA land naturally, single clear ask",
+        "status": "pending",
+        "note": ""
+      }
+    ],
+    "history": []
   }
 ]

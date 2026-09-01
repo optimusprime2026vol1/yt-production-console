@@ -70,5 +70,41 @@
     "voiceoverParts": 1,
     "rendered": true,
     "renderPath": "assets/t2/render.mp4"
+  },
+  "test3": {
+    "scriptGenerated": true,
+    "title": "The Two-Minute Rule That Fixes Procrastination",
+    "scriptPath": "scripts-content/test3.md",
+    "voiceoverReady": true,
+    "voiceoverParts": 1,
+    "visualsReady": true,
+    "sections": [
+      {
+        "start": 0,
+        "end": 15,
+        "duration": 15,
+        "visual": "Dark background. Quick cuts of cluttered desk, a blinking cursor on a blank document, a pile of unopened mail. Text overlay in bold white type: \"THE 2-MINUTE RULE.\" Then a fast zoom into a timer app set to 2:00."
+      },
+      {
+        "start": 15,
+        "end": 35,
+        "duration": 20,
+        "visual": "A clean infographic animation. A heavy metal block labeled \"TASK\" sits on a flat surface. A small arrow labeled \"FORCE\" tries to push it, but it won't budge. Then a smaller block labeled \"2 MIN\" slides the big block forward with ease. The screen cuts to a simple text card: \"ACTIVATION ENERGY.\""
+      },
+      {
+        "start": 35,
+        "end": 120,
+        "duration": 85,
+        "visual": "Split screen. Left side: a messy bedroom. A person's hands (only hands shown, no face) pick up one shirt and put it in a hamper. Right side: a blank word document. The hands type the words \"Chapter 1: The Beginning.\" Text overlay: \"PHYSICAL.\" \"MENTAL.\"\n\n**VO:** Take exercise. The thought of a 45-minute workout feels heavy. It\u2019s a huge block. But the *start* of a workout\u2014putting on your shoes\u2014takes 30 seconds. So shrink the goal. The rule isn't \"work out for 45 minutes.\" The rule is \"put on your shoes.\" That\u2019s it. That\u2019s the whole mission.\n\n**Visual:** A simple animation of a pair of running shoes appearing on feet. A timer starts: \"0:30 SECONDS.\" Once the shoes are on, the screen cuts to a silhouette running on a road at sunrise. Text overlay: \"START > FINISH.\"\n\n**VO:** The magic happens because motion begets motion. Once you're in the physical position of starting, your brain's resistance melts. You're not deciding to do the hard thing anymore\u2014you're just finishing the easy thing you already started. Most people who put on the shoes end up running. Most people who open the document end up writing a paragraph.\n\n**Visual:** A weight scale tipping. One side labeled \"RESISTANCE,\" the other labeled \"MOMENTUM.\" The MOMENTUM side drops. Then a clear checklist appears, ticking off boxes as the VO speaks:\n- [x] Put on shoes\n- [x] Walk to gym\n- [x] Start workout\nText at the bottom: \"INERTIA IS A LAW, NOT AN EXCUSE.\""
+      },
+      {
+        "start": 120,
+        "end": 180,
+        "duration": 60,
+        "visual": "A close-up of a hand pressing a button labeled \"START.\" The screen dissolves into a simple checklist with a single item: \"DO THE 2-MINUTE VERSION.\" A timer counts down from 2:00 to 0:00 in the corner.\n\n**VO:** You came here wondering how to beat procrastination. But you don't beat it with a grand strategy. You beat it by making the first move so small that it's not worth resisting. That blinking cursor? All it needs is one letter.\n\n**Visual:** A slow zoom out from the timer screen. The background is a calm, plain gradient. Text appears: \"SUBSCRIBE FOR ONE IDEA A WEEK.\" The cursor blinks next to it.\n\n**VO:** Start the timer. Start the task. The hardest part is already done\u2014you pressed play. Now go press start on something real.\n\n**Visual:** Fade to black. A single word remains on screen for two seconds before cutting out: \"GO.\""
+      }
+    ],
+    "rendered": true,
+    "renderPath": "assets/test3/render.mp4"
   }
 }
