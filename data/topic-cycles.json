@@ -30,5 +30,22 @@
         "competition": "Score 39/100 \u2014 several small-creator breakouts already validate demand"
       }
     ]
+  },
+  {
+    "id": "c2-test",
+    "generated": "2026-09-01",
+    "status": "decided",
+    "approvedId": "test3",
+    "candidates": [
+      {
+        "id": "test3",
+        "title": "The Two-Minute Rule That Fixes Procrastination",
+        "angle": "Starting is the hardest part - lower the threshold to bypass resistance",
+        "keyword": "two minute rule, procrastination",
+        "volume": "test candidate - fast pipeline iteration, not a real research result",
+        "competition": "n/a - internal test",
+        "targetMinutes": 3
+      }
+    ]
   }
 ]
