@@ -29,7 +29,7 @@
   .counts b{color:var(--text); font-weight:500;}
 
   .tabs{display:flex; gap:2px; margin-top:16px;}
-  .tab{flex:1; text-align:center; font-size:13px; font-weight:500; padding:10px 0; background:none; border:none; border-bottom:2px solid var(--border); color:var(--text-faint); cursor:pointer;}
+  .tab{flex:1; text-align:center; font-size:12.5px; font-weight:500; padding:10px 0; background:none; border:none; border-bottom:2px solid var(--border); color:var(--text-faint); cursor:pointer;}
   .tab.active{color:var(--text); border-bottom-color:var(--amber);}
 
   .queue-rail{display:flex; gap:8px; overflow-x:auto; padding:14px 16px; border-bottom:1px solid var(--border); scrollbar-width:none;}
@@ -44,6 +44,7 @@
   .dot.approved{background:var(--green);}
   .dot.returned{background:var(--coral);}
   .dot.decided{background:var(--green);}
+  .dot.rejected{background:var(--coral);}
 
   .empty{padding:60px 16px; text-align:center; color:var(--text-faint); font-size:13px;}
 
@@ -55,6 +56,7 @@
   .badge.approved{background:var(--green-dim); color:var(--green);}
   .badge.returned{background:var(--coral-dim); color:var(--coral);}
   .badge.decided{background:var(--green-dim); color:var(--green);}
+  .badge.rejected{background:var(--coral-dim); color:var(--coral);}
   .topic{color:var(--text-dim); font-size:13px; margin:6px 0 16px;}
 
   .readouts{display:flex; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:22px;}
@@ -115,6 +117,9 @@
   .approve-topic-btn.is-loser{background:none; border-color:var(--border); color:var(--text-faint); cursor:default;}
   .approve-topic-btn:disabled{cursor:default;}
   .sync-note{font-size:11px; color:var(--text-faint); padding:10px 16px 0;}
+
+  /* script review specific */
+  .script-body{font-family:var(--mono); font-size:12px; line-height:1.6; white-space:pre-wrap; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; max-height:50vh; overflow-y:auto; margin-bottom:18px;}
 </style>
 </head>
 <body>
@@ -126,7 +131,8 @@
     </div>
     <div class="counts" id="counts"></div>
     <div class="tabs">
-      <button class="tab" data-tab="topics" id="tabTopics">Topic approval</button>
+      <button class="tab" data-tab="topics" id="tabTopics">Topics</button>
+      <button class="tab" data-tab="scripts" id="tabScripts">Scripts</button>
       <button class="tab" data-tab="qc" id="tabQc">QC review</button>
     </div>
   </div>
@@ -137,14 +143,17 @@
 <script>
 const TOPIC_KEY = 'topic-cycles';
 const QC_KEY = 'qc-queue';
-const REPO_RAW_BASE = 'https://raw.githubusercontent.com/optimusprime2026vol1/yt-production-console/main/data';
+const SCRIPT_KEY = 'script-decisions';
+const REPO_RAW_BASE = 'https://raw.githubusercontent.com/optimusprime2026vol1/yt-production-console/main';
+const REPO_DATA_BASE = REPO_RAW_BASE + '/data';
 
 /* Local, per-browser storage for decisions made in this dashboard (approve
-   a topic, pass/flag a checklist item). The pipeline's own output (new
-   shortlists from Stage 1, new videos from Stage 6) lives in the repo's
-   data/*.json files and is fetched live below, then merged with any local
-   decisions so an approval made here isn't lost even though writing a
-   decision back into the repo isn't wired up yet - see SYSTEM_PLAN.md. */
+   a topic, pass/flag a checklist item, approve/reject a script). The
+   pipeline's own output (new shortlists from Stage 1, new scripts from
+   Stage 3, new videos from Stage 6) lives in the repo's data/*.json files
+   and is fetched live below, then merged with any local decisions so a
+   decision made here isn't lost even though writing it back into the
+   repo isn't wired up yet - see SYSTEM_PLAN.md. */
 const store = {
   get(key) {
     const v = localStorage.getItem(key);
@@ -162,10 +171,14 @@ let cycles = [];
 let activeCycleId = null;
 let queue = [];
 let activeVideoId = null;
+let pipelineState = {};
+let scriptDecisions = {};
+let activeScriptId = null;
+let scriptCache = {};
 let repoSyncOk = false;
 
 async function fetchRepoJSON(filename) {
-  const resp = await fetch(`${REPO_RAW_BASE}/${filename}?_=${Date.now()}`, { cache: 'no-store' });
+  const resp = await fetch(`${REPO_DATA_BASE}/${filename}?_=${Date.now()}`, { cache: 'no-store' });
   if (!resp.ok) throw new Error(`${filename}: ${resp.status}`);
   return resp.json();
 }
@@ -197,24 +210,30 @@ async function loadAll() {
   try { localCycles = JSON.parse(store.get(TOPIC_KEY).value); } catch (e) { /* none saved yet */ }
   let localQueue = [];
   try { localQueue = JSON.parse(store.get(QC_KEY).value); } catch (e) { /* none saved yet */ }
+  try { scriptDecisions = JSON.parse(store.get(SCRIPT_KEY).value); } catch (e) { scriptDecisions = {}; }
 
   try {
-    const [repoCycles, repoQueue] = await Promise.all([
+    const [repoCycles, repoQueue, repoState] = await Promise.all([
       fetchRepoJSON('topic-cycles.json'),
       fetchRepoJSON('qc-queue.json'),
+      fetchRepoJSON('pipeline-state.json'),
     ]);
     cycles = mergeCycles(repoCycles, localCycles);
     queue = mergeQueue(repoQueue, localQueue);
+    pipelineState = repoState;
     repoSyncOk = true;
   } catch (e) {
     console.warn('Repo sync failed, using local data only:', e);
     cycles = localCycles;
     queue = localQueue;
+    pipelineState = {};
     repoSyncOk = false;
   }
 
   activeCycleId = cycles.find(c => c.status === 'pending')?.id || cycles[0]?.id || null;
   activeVideoId = queue.find(v => v.stage === 'pending')?.id || queue[0]?.id || null;
+  const pendingScriptIds = Object.keys(pipelineState).filter(id => scriptReviewState(id) === 'pending');
+  activeScriptId = pendingScriptIds[0] || Object.keys(pipelineState).filter(id => pipelineState[id].scriptGenerated)[0] || null;
 
   render();
 }
@@ -227,16 +246,23 @@ function saveQueue() {
   try { store.set(QC_KEY, JSON.stringify(queue)); setStatus(repoSyncOk ? 'synced + saved on this device' : 'saved on this device'); }
   catch (e) { setStatus('save failed'); }
 }
+function saveScriptDecisions() {
+  try { store.set(SCRIPT_KEY, JSON.stringify(scriptDecisions)); setStatus('saved on this device - tell Claude to sync it into the repo'); }
+  catch (e) { setStatus('save failed'); }
+}
 function setStatus(msg) { document.getElementById('statusTag').textContent = msg; }
 function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 
 function render() {
   document.getElementById('tabTopics').className = 'tab' + (activeTab === 'topics' ? ' active' : '');
+  document.getElementById('tabScripts').className = 'tab' + (activeTab === 'scripts' ? ' active' : '');
   document.getElementById('tabQc').className = 'tab' + (activeTab === 'qc' ? ' active' : '');
   document.getElementById('tabTopics').onclick = () => { activeTab = 'topics'; render(); };
+  document.getElementById('tabScripts').onclick = () => { activeTab = 'scripts'; render(); };
   document.getElementById('tabQc').onclick = () => { activeTab = 'qc'; render(); };
 
   if (activeTab === 'topics') { renderCounts_Topics(); renderTopicsRail(); renderTopicsMain(); }
+  else if (activeTab === 'scripts') { renderCounts_Scripts(); renderScriptsRail(); renderScriptsMain(); }
   else { renderCounts_QC(); renderQcRail(); renderQcMain(); }
 
   const resetBtn = document.getElementById('resetLink');
@@ -317,6 +343,105 @@ function approveTopic(cycle, topicId) {
   render();
 }
 
+/* ---------- SCRIPT REVIEW ---------- */
+
+function scriptReviewState(topicId) {
+  const data = pipelineState[topicId];
+  if (!data || !data.scriptGenerated) return null;
+  const local = scriptDecisions[topicId];
+  if (local) return local.approved ? 'approved' : 'rejected';
+  if (data.scriptApproved === true) return 'approved';
+  if (data.scriptApproved === false) return 'rejected';
+  return 'pending';
+}
+
+function renderCounts_Scripts() {
+  const ids = Object.keys(pipelineState).filter(id => pipelineState[id].scriptGenerated);
+  const pending = ids.filter(id => scriptReviewState(id) === 'pending').length;
+  const approved = ids.filter(id => scriptReviewState(id) === 'approved').length;
+  document.getElementById('counts').innerHTML =
+    `<span><b>${pending}</b> awaiting review</span><span><b>${approved}</b> approved</span>`;
+  if (!repoSyncOk) setStatus('repo sync failed - local data only');
+  else setStatus(pending ? `${pending} script(s) to review` : 'no scripts pending');
+}
+
+function renderScriptsRail() {
+  const rail = document.getElementById('railSlot');
+  const ids = Object.keys(pipelineState).filter(id => pipelineState[id].scriptGenerated);
+  if (ids.length === 0) { rail.innerHTML = ''; return; }
+  rail.innerHTML = '<div class="queue-rail" id="queueRail"></div>';
+  const el = document.getElementById('queueRail');
+  ids.forEach(id => {
+    const data = pipelineState[id];
+    const state = scriptReviewState(id);
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (id === activeScriptId ? ' active' : '');
+    chip.innerHTML = `<div class="chip-title">${escapeHtml(data.title || id)}</div>
+      <div class="chip-stage"><span class="dot ${state}"></span>${state}</div>`;
+    chip.onclick = () => { activeScriptId = id; render(); };
+    el.appendChild(chip);
+  });
+}
+
+async function renderScriptsMain() {
+  const main = document.getElementById('main');
+  const data = pipelineState[activeScriptId];
+  if (!data || !data.scriptGenerated) {
+    main.innerHTML = `<div class="empty">No scripts waiting for review.<br>Run the "Pipeline" GitHub Action once a topic is approved.</div>` + footer();
+    return;
+  }
+
+  if (scriptCache[activeScriptId] === undefined) {
+    main.innerHTML = `<div class="empty">Loading script…</div>`;
+    try {
+      const resp = await fetch(`${REPO_RAW_BASE}/${data.scriptPath}?_=${Date.now()}`, { cache: 'no-store' });
+      scriptCache[activeScriptId] = resp.ok ? await resp.text() : '(could not load script content)';
+    } catch (e) {
+      scriptCache[activeScriptId] = '(could not load script content)';
+    }
+    render();
+    return;
+  }
+
+  const state = scriptReviewState(activeScriptId);
+  const local = scriptDecisions[activeScriptId];
+
+  main.innerHTML = `
+    <div class="meta-row">
+      <h2>${escapeHtml(data.title || activeScriptId)}</h2>
+      <span class="badge ${state}">${state}</span>
+    </div>
+    <div class="topic">Read the full script below before approving.</div>
+    <div class="script-body">${escapeHtml(scriptCache[activeScriptId])}</div>
+    <div class="verdict">
+      ${state === 'pending' ? `
+        <div class="verdict-hint">Approve to let voice &amp; visuals proceed, or reject with a note (e.g. wrong language, wrong tone) to have it regenerated.</div>
+        <textarea class="note" id="scriptRejectNote" placeholder="If rejecting: what needs to change, specifically"></textarea>
+        <div class="verdict-buttons" style="margin-top:10px;">
+          <button class="btn btn-approve" id="scriptApproveBtn">Approve script</button>
+          <button class="btn btn-reject" id="scriptRejectBtn">Reject &amp; regenerate</button>
+        </div>
+      ` : state === 'approved' ? `<div class="verdict-done"><b>Approved.</b> Voice and visuals can proceed.${local ? ' (saved on this device - tell Claude to sync it into the repo so the Pipeline sees it)' : ''}</div>`
+        : `<div class="verdict-done"><b>Rejected.</b> ${local && local.note ? escapeHtml(local.note) : ''}${local ? ' (saved on this device - tell Claude to sync it into the repo so Stage 3 regenerates it)' : ''}</div>`}
+    </div>
+    ${footer()}
+  `;
+
+  if (state === 'pending') {
+    document.getElementById('scriptApproveBtn').onclick = () => decideScript(activeScriptId, true, '');
+    document.getElementById('scriptRejectBtn').onclick = () => {
+      const note = document.getElementById('scriptRejectNote').value.trim();
+      decideScript(activeScriptId, false, note || 'No specific reason given.');
+    };
+  }
+}
+
+function decideScript(topicId, approved, note) {
+  scriptDecisions[topicId] = { approved, note };
+  saveScriptDecisions();
+  render();
+}
+
 /* ---------- QC REVIEW ---------- */
 
 function renderCounts_QC() {
@@ -349,7 +474,7 @@ function stageLabel(s) { return s === 'pending' ? 'pending QC' : s === 'approved
 function renderQcMain() {
   const main = document.getElementById('main');
   const v = queue.find(x => x.id === activeVideoId);
-  if (!v) { main.innerHTML = `<div class="empty">No videos in the queue yet.<br>Run the "Pipeline" GitHub Action once a topic is approved.</div>` + footer(); return; }
+  if (!v) { main.innerHTML = `<div class="empty">No videos in the queue yet.<br>Run the "Pipeline" GitHub Action once a script is approved.</div>` + footer(); return; }
 
   const flagged = v.checklist.filter(i => i.status === 'flag');
   const allResolved = v.checklist.every(i => i.status === 'pass');
@@ -446,6 +571,8 @@ function footer() {
 async function resetAll() {
   localStorage.removeItem(TOPIC_KEY);
   localStorage.removeItem(QC_KEY);
+  localStorage.removeItem(SCRIPT_KEY);
+  scriptCache = {};
   setStatus('re-syncing…');
   await loadAll();
 }
