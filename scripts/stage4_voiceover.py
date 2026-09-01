@@ -2,26 +2,44 @@
 """
 Stage 4 - Voiceover.
 
-For each generated script without voiceover audio yet, extracts the VO-only
-text, splits it into ElevenLabs-safe chunks (~4500 chars), synthesizes each
-chunk, and saves the resulting MP3s.
+Tries ElevenLabs first (if ELEVENLABS_API_KEY is set) - better quality,
+but has a character quota. Falls back to Piper TTS otherwise: fully
+offline, no API key, no character limit, since it runs entirely inside
+the GitHub Actions runner instead of calling an external service.
 
-Required secret: ELEVENLABS_API_KEY
+Piper: pip-installed in the workflow, voice model downloaded once from
+Hugging Face (~60MB), synthesizes the whole script in one pass - no
+chunking needed since there's no per-request character cap.
+
 Reads: data/pipeline-state.json, scripts-content/{id}.md
-Writes: assets/{id}/voiceover-partN.mp3, data/pipeline-state.json
+Writes: assets/{id}/voiceover-part1.mp3 (+ partN.mp3 if ElevenLabs chunks
+        it), data/pipeline-state.json
 """
 import json
 import os
 import re
-import sys
+import subprocess
+import urllib.request
 
 import requests
 
-ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
 STATE_PATH = "data/pipeline-state.json"
 ASSETS_DIR = "assets"
-VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")
+MODELS_DIR = "piper-models"
+
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY") or None
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID") or "JBFqnCBsd6RMkjVDRZzb"
 MAX_CHUNK_CHARS = 4500
+
+PIPER_VOICE = os.environ.get("PIPER_VOICE") or "en_US-lessac-medium"
+_locale, _speaker, _quality = PIPER_VOICE.split("-")
+_lang = _locale.split("_")[0]
+PIPER_BASE_URL = (
+    f"https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+    f"{_lang}/{_locale}/{_speaker}/{_quality}"
+)
+PIPER_ONNX_URL = f"{PIPER_BASE_URL}/{PIPER_VOICE}.onnx"
+PIPER_CONFIG_URL = f"{PIPER_BASE_URL}/{PIPER_VOICE}.onnx.json"
 
 
 def load_json(path, default):
@@ -61,9 +79,9 @@ def chunk_text(blocks, max_chars):
     return chunks
 
 
-def synthesize(text):
+def synthesize_elevenlabs_chunk(text):
     resp = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}",
+        f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}",
         headers={
             "xi-api-key": ELEVENLABS_API_KEY,
             "content-type": "application/json",
@@ -80,11 +98,53 @@ def synthesize(text):
     return resp.content
 
 
-def main():
-    if not ELEVENLABS_API_KEY:
-        print("Skipping voiceover - missing ELEVENLABS_API_KEY")
-        sys.exit(0)
+def run_elevenlabs(vo_blocks, out_dir):
+    chunks = chunk_text(vo_blocks, MAX_CHUNK_CHARS)
+    for i, chunk in enumerate(chunks, start=1):
+        audio = synthesize_elevenlabs_chunk(chunk)
+        out_path = os.path.join(out_dir, f"voiceover-part{i}.mp3")
+        with open(out_path, "wb") as f:
+            f.write(audio)
+        print(f"  Wrote {out_path} ({len(chunk)} chars)")
+    return len(chunks)
 
+
+def ensure_piper_model():
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    onnx_path = os.path.join(MODELS_DIR, f"{PIPER_VOICE}.onnx")
+    config_path = os.path.join(MODELS_DIR, f"{PIPER_VOICE}.onnx.json")
+    if not os.path.exists(onnx_path):
+        print(f"  Downloading Piper voice model: {PIPER_ONNX_URL}")
+        urllib.request.urlretrieve(PIPER_ONNX_URL, onnx_path)
+    if not os.path.exists(config_path):
+        print(f"  Downloading Piper voice config: {PIPER_CONFIG_URL}")
+        urllib.request.urlretrieve(PIPER_CONFIG_URL, config_path)
+    return onnx_path
+
+
+def run_piper(vo_blocks, out_dir):
+    onnx_path = ensure_piper_model()
+    full_text = "\n\n".join(vo_blocks)
+    wav_path = os.path.join(out_dir, "_voiceover.wav")
+    mp3_path = os.path.join(out_dir, "voiceover-part1.mp3")
+
+    subprocess.run(
+        ["piper", "--model", onnx_path, "--output_file", wav_path],
+        input=full_text,
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", wav_path, "-codec:a", "libmp3lame",
+         "-qscale:a", "2", mp3_path],
+        check=True,
+    )
+    os.remove(wav_path)
+    print(f"  Wrote {mp3_path} ({len(full_text)} chars, Piper local TTS)")
+    return 1
+
+
+def main():
     state = load_json(STATE_PATH, {})
 
     for topic_id, entry in state.items():
@@ -103,18 +163,18 @@ def main():
             print(f"  No VO blocks found in {script_path} - skipping")
             continue
 
-        chunks = chunk_text(vo_blocks, MAX_CHUNK_CHARS)
         out_dir = os.path.join(ASSETS_DIR, topic_id)
         os.makedirs(out_dir, exist_ok=True)
-        for i, chunk in enumerate(chunks, start=1):
-            audio = synthesize(chunk)
-            out_path = os.path.join(out_dir, f"voiceover-part{i}.mp3")
-            with open(out_path, "wb") as f:
-                f.write(audio)
-            print(f"  Wrote {out_path} ({len(chunk)} chars)")
+
+        if ELEVENLABS_API_KEY:
+            print("  Using ElevenLabs")
+            part_count = run_elevenlabs(vo_blocks, out_dir)
+        else:
+            print("  No ELEVENLABS_API_KEY - using Piper (local, free, no quota)")
+            part_count = run_piper(vo_blocks, out_dir)
 
         entry["voiceoverReady"] = True
-        entry["voiceoverParts"] = len(chunks)
+        entry["voiceoverParts"] = part_count
         save_json(STATE_PATH, state)
 
 
