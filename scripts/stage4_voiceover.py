@@ -12,6 +12,9 @@ Piper: pip-installed in the workflow, voice model downloaded once from
 Hugging Face (~60MB), synthesizes the whole script in one pass - no
 chunking needed since there's no per-request character cap.
 
+Requires scriptApproved=true (see stage3_script.py) - won't touch a
+script that hasn't been explicitly reviewed and approved by a human yet.
+
 Reads: data/pipeline-state.json, scripts-content/{id}.md
 Writes: assets/{id}/voiceover-part1.mp3 (+ partN.mp3 if ElevenLabs chunks
         it), data/pipeline-state.json
@@ -155,6 +158,8 @@ def main():
     for topic_id, entry in state.items():
         if not entry.get("scriptGenerated") or entry.get("voiceoverReady"):
             continue
+        if not entry.get("scriptApproved"):
+            continue  # waiting on human script review - see stage3_script.py
         script_path = entry.get("scriptPath")
         if not script_path or not os.path.exists(script_path):
             continue
