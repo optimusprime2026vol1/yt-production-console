@@ -70,10 +70,5 @@
     "voiceoverParts": 1,
     "rendered": true,
     "renderPath": "assets/t2/render.mp4"
-  },
-  "test3": {
-    "scriptGenerated": true,
-    "title": "The Two-Minute Rule That Fixes Procrastination",
-    "scriptPath": "scripts-content/test3.md"
   }
 }
