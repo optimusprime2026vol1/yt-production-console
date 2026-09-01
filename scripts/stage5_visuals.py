@@ -18,6 +18,11 @@ Visual text, mislabeling it with the outer header's much longer timestamp
 range. The umbrella header's own block (empty, just its sub-headers) has no
 Visual of its own and is correctly skipped instead of producing a bad entry.
 
+If a section has multiple **VO:**/**Visual:** pairs (common in shorter
+scripts where one timestamped header covers several beats), only the
+first Visual cue in that block is used as the stock-search query - one
+broll clip per section either way.
+
 Required secret: PEXELS_API_KEY
 Reads: data/pipeline-state.json, scripts-content/{id}.md
 Writes: assets/{id}/broll/section-N.mp4, assets/{id}/broll/credits.json
@@ -63,7 +68,10 @@ def parse_sections(script_text):
         block_end = headers[i + 1].start() if i + 1 < len(headers) else len(script_text)
         block = script_text[block_start:block_end]
 
-        visual_match = re.search(r"\*\*Visual:\*\*\s*\n(.*?)(?=\n---|\Z)", block, re.DOTALL)
+        # \s* (not \s*\n) - Visual text can start right after the marker
+        # on the same line, or on the next line; formatting varies by
+        # script length/style.
+        visual_match = re.search(r"\*\*Visual:\*\*\s*(.*?)(?=\n---|\Z)", block, re.DOTALL)
         if not visual_match:
             continue  # umbrella header (e.g. "## BODY") with no direct Visual of its own
 
